@@ -383,43 +383,92 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                             const SizedBox(height: 8),
 
                             ...events.map((event) {
-                              return Container(
-                                width: double.infinity,
+                              return GestureDetector(
+                                onLongPress: () async {
+                                  final confirm = await showDialog<bool>(
+                                    context: context,
 
-                                margin: const EdgeInsets.only(bottom: 8),
+                                    builder: (context) {
+                                      return AlertDialog(
+                                        title: const Text("Delete Event"),
 
-                                padding: const EdgeInsets.all(12),
+                                        content: Text(
+                                          "Delete ${event["title"]} ?",
+                                        ),
 
-                                decoration: BoxDecoration(
-                                  color: Colors.deepPurple,
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () {
+                                              Navigator.pop(context, false);
+                                            },
 
-                                  borderRadius: BorderRadius.circular(18),
-                                ),
+                                            child: const Text("Cancel"),
+                                          ),
 
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                          ElevatedButton(
+                                            onPressed: () {
+                                              Navigator.pop(context, true);
+                                            },
 
-                                  children: [
-                                    Text(
-                                      event["title"]!,
+                                            child: const Text("Delete"),
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  );
 
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
+                                  if (confirm != true) {
+                                    return;
+                                  }
+
+                                  setState(() {
+                                    schedule.remove(event);
+                                  });
+
+                                  await StorageService.saveSchedule(schedule);
+                                },
+
+                                child: Container(
+                                  width: double.infinity,
+
+                                  margin: const EdgeInsets.only(bottom: 8),
+
+                                  padding: const EdgeInsets.all(12),
+
+                                  decoration: BoxDecoration(
+                                    color: Colors.deepPurple,
+
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+
+                                    children: [
+                                      Text(
+                                        event["title"]!,
+
+                                        style: const TextStyle(
+                                          color: Colors.white,
+
+                                          fontSize: 16,
+
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
-                                    ),
 
-                                    const SizedBox(height: 6),
+                                      const SizedBox(height: 6),
 
-                                    Text(
-                                      "${event["start"]} - ${event["end"]}",
+                                      Text(
+                                        "${event["start"]} - ${event["end"]}",
 
-                                      style: const TextStyle(
-                                        color: Colors.white70,
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               );
                             }).toList(),
