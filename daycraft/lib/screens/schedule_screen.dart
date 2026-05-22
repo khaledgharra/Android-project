@@ -338,42 +338,94 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
           Expanded(
             child: ListView.builder(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
 
-              itemCount: filtered.length,
+              itemCount: 15,
 
-              itemBuilder: (context, index) {
-                final item = filtered[index];
+              itemBuilder: (context, hourIndex) {
+                final hour = 8 + hourIndex;
+
+                final filtered = getFilteredSchedule();
+
+                final events = filtered.where((event) {
+                  final start = event["start"]!.split(":");
+
+                  final eventHour = int.parse(start[0]);
+
+                  return eventHour == hour;
+                }).toList();
 
                 return Container(
-                  margin: const EdgeInsets.only(bottom: 16),
+                  height: 140,
 
-                  padding: const EdgeInsets.all(20),
-
-                  decoration: BoxDecoration(
-                    color: Colors.deepPurple.shade50,
-
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-
-                  child: Column(
+                  child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
 
                     children: [
-                      Text(
-                        item["title"]!,
+                      SizedBox(
+                        width: 60,
 
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
+                        child: Text(
+                          "${hour.toString().padLeft(2, '0')}:00",
+
+                          style: const TextStyle(
+                            color: Colors.grey,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
 
-                      const SizedBox(height: 10),
+                      Expanded(
+                        child: Column(
+                          children: [
+                            Container(height: 1, color: Colors.grey.shade300),
 
-                      Text(item["day"]!),
+                            const SizedBox(height: 8),
 
-                      Text("${item["start"]} - ${item["end"]}"),
+                            ...events.map((event) {
+                              return Container(
+                                width: double.infinity,
+
+                                margin: const EdgeInsets.only(bottom: 8),
+
+                                padding: const EdgeInsets.all(12),
+
+                                decoration: BoxDecoration(
+                                  color: Colors.deepPurple,
+
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+
+                                  children: [
+                                    Text(
+                                      event["title"]!,
+
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+
+                                    const SizedBox(height: 6),
+
+                                    Text(
+                                      "${event["start"]} - ${event["end"]}",
+
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 );

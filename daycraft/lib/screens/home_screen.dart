@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/task.dart';
 import 'schedule_screen.dart';
 import '../services/storage_service.dart';
+import 'deadlines_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -12,6 +13,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   List<Map<String, String>> todayTasks = [];
+  List<Map<String, String>> upcomingDeadlines = [];
 
   final TextEditingController taskController = TextEditingController();
 
@@ -20,6 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
 
     loadTodayTasks();
+    loadUpcomingDeadlines();
   }
 
   Widget build(BuildContext context) {
@@ -36,6 +39,15 @@ class _HomeScreenState extends State<HomeScreen> {
               loadTodayTasks();
             });
           }
+
+          if (index == 2) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const DeadlinesScreen()),
+            ).then((_) {
+              loadUpcomingDeadlines();
+            });
+          }
         },
 
         items: const [
@@ -44,7 +56,10 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icon(Icons.calendar_today),
             label: "Calendar",
           ),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.warning),
+            label: "Deadlines",
+          ),
         ],
       ),
 
@@ -97,50 +112,146 @@ class _HomeScreenState extends State<HomeScreen> {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 20),
 
-              Text(
-                getGreeting(),
-                style: TextStyle(fontSize: 18, color: Colors.grey),
-              ),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 20),
 
-              const SizedBox(height: 8),
-
-              Text(
-                getFormattedDate(),
-                style: const TextStyle(fontSize: 18, color: Colors.grey),
-              ),
-
-              const SizedBox(height: 8),
-
-              const Text(
-                "Khaled",
-                style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold),
-              ),
-
-              const SizedBox(height: 40),
-
-              const Text(
-                "Today's Tasks",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
-
-              const SizedBox(height: 20),
-
-              Expanded(
-                child: ListView.builder(
-                  itemCount: todayTasks.length,
-                  itemBuilder: (context, index) {
-                    final task = todayTasks[index];
-
-                    return scheduleCard(task);
-                  },
+                Text(
+                  getGreeting(),
+                  style: TextStyle(fontSize: 18, color: Colors.grey),
                 ),
-              ),
-            ],
+
+                const SizedBox(height: 8),
+
+                Text(
+                  getFormattedDate(),
+                  style: const TextStyle(fontSize: 18, color: Colors.grey),
+                ),
+
+                const SizedBox(height: 8),
+
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+                  children: [
+                    const Text(
+                      "Khaled",
+
+                      style: TextStyle(
+                        fontSize: 36,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+
+                      children: [
+                        const Text(
+                          "Upcoming Deadlines",
+
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.black,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+
+                        const SizedBox(height: 2),
+
+                        SizedBox(
+                          height: 60,
+                          width: 170,
+
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+
+                            itemCount: upcomingDeadlines.take(2).length,
+
+                            itemBuilder: (context, index) {
+                              final item = upcomingDeadlines[index];
+
+                              return Container(
+                                width: 80,
+
+                                margin: const EdgeInsets.only(left: 4),
+
+                                padding: const EdgeInsets.all(10),
+
+                                decoration: BoxDecoration(
+                                  color: Colors.red,
+
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+
+                                  children: [
+                                    Text(
+                                      item["title"]!,
+
+                                      maxLines: 1,
+
+                                      overflow: TextOverflow.ellipsis,
+
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+
+                                    const Spacer(),
+
+                                    Text(
+                                      item["date"]!,
+
+                                      style: const TextStyle(fontSize: 10),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 10),
+
+                const Text(
+                  "Today's Tasks",
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+
+                const SizedBox(height: 20),
+
+                SizedBox(
+                  height: 220,
+
+                  child: ListView.builder(
+                    physics: const NeverScrollableScrollPhysics(),
+
+                    itemCount: todayTasks.length,
+
+                    itemBuilder: (context, index) {
+                      final task = todayTasks[index];
+
+                      return scheduleCard(task);
+                    },
+                  ),
+                ),
+
+                const SizedBox(height: 30),
+              ],
+            ),
           ),
         ),
       ),
@@ -207,6 +318,34 @@ class _HomeScreenState extends State<HomeScreen> {
 
     setState(() {
       todayTasks = filtered;
+    });
+  }
+
+  Future<void> loadUpcomingDeadlines() async {
+    final allDeadlines = await StorageService.loadDeadlines();
+
+    allDeadlines.sort((a, b) {
+      final aDate = a["date"]!.split("/");
+
+      final bDate = b["date"]!.split("/");
+
+      final aDateTime = DateTime(
+        int.parse(aDate[2]),
+        int.parse(aDate[1]),
+        int.parse(aDate[0]),
+      );
+
+      final bDateTime = DateTime(
+        int.parse(bDate[2]),
+        int.parse(bDate[1]),
+        int.parse(bDate[0]),
+      );
+
+      return aDateTime.compareTo(bDateTime);
+    });
+
+    setState(() {
+      upcomingDeadlines = allDeadlines.take(3).toList();
     });
   }
 
