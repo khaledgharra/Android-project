@@ -355,7 +355,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   return eventHour == hour;
                 }).toList();
 
-                return Container(
+                return SizedBox(
                   height: 140,
 
                   child: Row(
@@ -471,7 +471,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                   ),
                                 ),
                               );
-                            }).toList(),
+                            }),
                           ],
                         ),
                       ),

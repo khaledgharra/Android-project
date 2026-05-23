@@ -224,7 +224,7 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
             padding: const EdgeInsets.all(20),
 
             decoration: BoxDecoration(
-              color: getPriorityColor(item["priority"]!).withOpacity(0.15),
+              color: getPriorityColor(item["priority"]!).withValues(alpha: 0.15),
 
               borderRadius: BorderRadius.circular(20),
             ),

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "46831407982",
+    "project_id": "daycraft-9e9ee",
+    "storage_bucket": "daycraft-9e9ee.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:46831407982:android:4d44276bb6f189ed51a77f",
+        "android_client_info": {
+          "package_name": "com.example.daycraft"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCDV01NA4ZxoTiD42wfuwEbd90Rr6PSbpI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

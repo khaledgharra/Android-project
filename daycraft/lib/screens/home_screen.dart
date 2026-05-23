@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../models/task.dart';
 import 'schedule_screen.dart';
 import '../services/storage_service.dart';
+import '../services/auth_service.dart';
 import 'deadlines_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -25,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
     loadUpcomingDeadlines();
   }
 
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       bottomNavigationBar: BottomNavigationBar(
@@ -133,18 +134,54 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 const SizedBox(height: 8),
 
+                // Logout button
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    icon: const Icon(Icons.logout, color: Colors.grey),
+                    tooltip: "Logout",
+                    onPressed: () async {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text("Logout"),
+                          content: const Text("Are you sure you want to logout?"),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, false),
+                              child: const Text("Cancel"),
+                            ),
+                            ElevatedButton(
+                              onPressed: () => Navigator.pop(context, true),
+                              child: const Text("Logout"),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirm == true) {
+                        await AuthService.signOut();
+                      }
+                    },
+                  ),
+                ),
+
+                const SizedBox(height: 4),
+
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
 
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
 
                   children: [
-                    const Text(
-                      "Khaled",
+                    Flexible(
+                      child: Text(
+                        _getUserDisplayName(),
 
-                      style: TextStyle(
-                        fontSize: 36,
-                        fontWeight: FontWeight.bold,
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
 
@@ -391,5 +428,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return "$day, "
         "${now.day}/${now.month}/${now.year}";
+  }
+
+  String _getUserDisplayName() {
+    final user = AuthService.currentUser;
+    if (user == null) return "Student";
+    if (user.displayName != null && user.displayName!.isNotEmpty) {
+      return user.displayName!;
+    }
+    // Use the part before @ in email
+    final email = user.email ?? "";
+    if (email.contains("@")) {
+      return email.split("@")[0];
+    }
+    return "Student";
   }
 }
