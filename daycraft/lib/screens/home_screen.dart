@@ -3,6 +3,7 @@ import 'schedule_screen.dart';
 import '../services/storage_service.dart';
 import '../services/auth_service.dart';
 import 'deadlines_screen.dart';
+import 'courses_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -12,8 +13,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  List<Map<String, String>> todayTasks = [];
-  List<Map<String, String>> upcomingDeadlines = [];
+  List<Map<String, dynamic>> todayTasks = [];
+  List<Map<String, dynamic>> upcomingDeadlines = [];
 
   final TextEditingController taskController = TextEditingController();
 
@@ -31,6 +32,13 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: 0,
 
+        type: BottomNavigationBarType.fixed,
+
+        selectedItemColor: Colors.deepPurple,
+        unselectedItemColor: Colors.grey,
+
+        backgroundColor: Colors.white,
+
         onTap: (index) {
           if (index == 1) {
             Navigator.push(
@@ -44,6 +52,13 @@ class _HomeScreenState extends State<HomeScreen> {
           if (index == 2) {
             Navigator.push(
               context,
+              MaterialPageRoute(builder: (context) => const CoursesScreen()),
+            );
+          }
+
+          if (index == 3) {
+            Navigator.push(
+              context,
               MaterialPageRoute(builder: (context) => const DeadlinesScreen()),
             ).then((_) {
               loadUpcomingDeadlines();
@@ -53,10 +68,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
+
           BottomNavigationBarItem(
             icon: Icon(Icons.calendar_today),
             label: "Calendar",
           ),
+
+          BottomNavigationBarItem(icon: Icon(Icons.school), label: "Courses"),
+
           BottomNavigationBarItem(
             icon: Icon(Icons.warning),
             label: "Deadlines",
@@ -145,7 +164,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         context: context,
                         builder: (context) => AlertDialog(
                           title: const Text("Logout"),
-                          content: const Text("Are you sure you want to logout?"),
+                          content: const Text(
+                            "Are you sure you want to logout?",
+                          ),
                           actions: [
                             TextButton(
                               onPressed: () => Navigator.pop(context, false),
@@ -295,7 +316,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget scheduleCard(Map<String, String> task) {
+  Widget scheduleCard(Map<String, dynamic> task) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(20),
@@ -331,7 +352,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final currentHour = now.hour;
     final currentMinute = now.minute;
 
-    List<Map<String, String>> filtered = [];
+    List<Map<String, dynamic>> filtered = [];
 
     for (var task in allTasks) {
       if (task["day"] != currentDay) {
@@ -362,23 +383,11 @@ class _HomeScreenState extends State<HomeScreen> {
     final allDeadlines = await StorageService.loadDeadlines();
 
     allDeadlines.sort((a, b) {
-      final aDate = a["date"]!.split("/");
+      final aDate = DateTime.parse(a["date"]);
 
-      final bDate = b["date"]!.split("/");
+      final bDate = DateTime.parse(b["date"]);
 
-      final aDateTime = DateTime(
-        int.parse(aDate[2]),
-        int.parse(aDate[1]),
-        int.parse(aDate[0]),
-      );
-
-      final bDateTime = DateTime(
-        int.parse(bDate[2]),
-        int.parse(bDate[1]),
-        int.parse(bDate[0]),
-      );
-
-      return aDateTime.compareTo(bDateTime);
+      return aDate.compareTo(bDate);
     });
 
     setState(() {

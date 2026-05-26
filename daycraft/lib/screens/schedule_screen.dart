@@ -9,13 +9,14 @@ class ScheduleScreen extends StatefulWidget {
 }
 
 class _ScheduleScreenState extends State<ScheduleScreen> {
-  List<Map<String, String>> schedule = [];
+  List<Map<String, dynamic>> schedule = [];
 
   String currentViewDay = "Sunday";
 
   final TextEditingController titleController = TextEditingController();
 
   String selectedDay = "Sunday";
+  String selectedType = "Activity";
 
   TimeOfDay? startTime;
   TimeOfDay? endTime;
@@ -75,10 +76,51 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     if (titleController.text.isEmpty || startTime == null || endTime == null) {
       return;
     }
+    final newStart = startTime!.hour * 60 + startTime!.minute;
+
+    final newEnd = endTime!.hour * 60 + endTime!.minute;
+
+    final overlapping = schedule.any((item) {
+      if (item["day"] != selectedDay) {
+        return false;
+      }
+
+      final existingStartTime = TimeOfDay(
+        hour: int.parse(item["start"].split(":")[0]),
+
+        minute: int.parse(item["start"].split(":")[1].split(" ")[0]),
+      );
+
+      final existingEndTime = TimeOfDay(
+        hour: int.parse(item["end"].split(":")[0]),
+
+        minute: int.parse(item["end"].split(":")[1].split(" ")[0]),
+      );
+
+      final existingStartMinutes =
+          existingStartTime.hour * 60 + existingStartTime.minute;
+
+      final existingEndMinutes =
+          existingEndTime.hour * 60 + existingEndTime.minute;
+
+      return !(newEnd <= existingStartMinutes ||
+          newStart >= existingEndMinutes);
+    });
+
+    if (overlapping) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("This activity overlaps with another schedule item"),
+        ),
+      );
+
+      return;
+    }
 
     setState(() {
       schedule.add({
         "title": titleController.text,
+        "type": selectedType,
         "day": selectedDay,
         "start": "${startTime!.hour}:${startTime!.minute}",
         "end": "${endTime!.hour}:${endTime!.minute}",
@@ -108,10 +150,30 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   children: [
                     TextField(
                       controller: titleController,
-
                       decoration: const InputDecoration(
                         hintText: "Lecture / Gym / Prayer...",
                       ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    DropdownButton<String>(
+                      value: selectedType,
+                      isExpanded: true,
+                      items: const [
+                        DropdownMenuItem(
+                          value: "Course",
+                          child: Text("Course"),
+                        ),
+                        DropdownMenuItem(
+                          value: "Activity",
+                          child: Text("Activity"),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        setDialogState(() {
+                          selectedType = value!;
+                        });
+                      },
                     ),
 
                     const SizedBox(height: 20),
@@ -251,9 +313,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     );
   }
 
-  List<Map<String, String>> getFilteredSchedule() {
-    List<Map<String, String>> filtered = schedule.where((item) {
-      return item["day"] == currentViewDay;
+  List<Map<String, dynamic>> getFilteredSchedule() {
+    List<Map<String, dynamic>> filtered = schedule.where((item) {
+      return item["day"] != null &&
+          item["start"] != null &&
+          item["end"] != null &&
+          item["day"] == currentViewDay;
     }).toList();
 
     filtered.sort((a, b) {
@@ -355,8 +420,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   return eventHour == hour;
                 }).toList();
 
-                return SizedBox(
-                  height: 140,
+                return Container(
+                  constraints: const BoxConstraints(minHeight: 140),
 
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -436,7 +501,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                   padding: const EdgeInsets.all(12),
 
                                   decoration: BoxDecoration(
-                                    color: Colors.deepPurple,
+                                    color: Color(
+                                      event["color"] ?? Colors.deepPurple.value,
+                                    ),
 
                                     borderRadius: BorderRadius.circular(18),
                                   ),
@@ -449,11 +516,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                       Text(
                                         event["title"]!,
 
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+
                                         style: const TextStyle(
                                           color: Colors.white,
-
                                           fontSize: 16,
-
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
