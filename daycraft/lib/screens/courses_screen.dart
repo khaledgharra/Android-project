@@ -743,66 +743,53 @@ class _CoursesScreenState extends State<CoursesScreen> {
     };
 
     loadedSchedule.add(course);
+
     if (course["lecture"] != null) {
       final lecture = course["lecture"] as Map<String, dynamic>;
 
+      if (overlaps(lecture["day"], lecture["start"], lecture["end"])) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Lecture overlaps with another schedule item"),
+          ),
+        );
+
+        return;
+      }
+
       loadedSchedule.add({
         "title": "${course["name"]} Lecture",
-
         "type": "Course",
-
         "courseName": course["name"],
-
         "day": lecture["day"],
-
         "start": lecture["start"],
-
         "end": lecture["end"],
-
         "color": course["color"],
       });
-    }
-    final lecture = course["lecture"] as Map<String, dynamic>;
-
-    if (overlaps(lecture["day"], lecture["start"], lecture["end"])) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Lecture overlaps with another schedule item"),
-        ),
-      );
-
-      return;
     }
 
     if (course["tutorial"] != null) {
       final tutorial = course["tutorial"] as Map<String, dynamic>;
 
+      if (overlaps(tutorial["day"], tutorial["start"], tutorial["end"])) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Tutorial overlaps with another schedule item"),
+          ),
+        );
+
+        return;
+      }
+
       loadedSchedule.add({
         "title": "${course["name"]} Tutorial",
-
         "type": "Course",
-
         "courseName": course["name"],
-
         "day": tutorial["day"],
-
         "start": tutorial["start"],
-
         "end": tutorial["end"],
-
         "color": course["color"],
       });
-    }
-    final tutorial = course["tutorial"] as Map<String, dynamic>;
-
-    if (overlaps(tutorial["day"], tutorial["start"], tutorial["end"])) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Tutorial overlaps with another schedule item"),
-        ),
-      );
-
-      return;
     }
 
     await StorageService.saveSchedule(loadedSchedule);

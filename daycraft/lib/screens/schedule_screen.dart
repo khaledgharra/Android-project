@@ -122,8 +122,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         "title": titleController.text,
         "type": selectedType,
         "day": selectedDay,
-        "start": "${startTime!.hour}:${startTime!.minute}",
-        "end": "${endTime!.hour}:${endTime!.minute}",
+        "start": startTime!.format(context),
+        "end": endTime!.format(context),
       });
     });
 
@@ -336,6 +336,36 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     return filtered;
   }
 
+  DateTime parseTime(String time) {
+    final cleaned = time.trim().toUpperCase();
+
+    final parts = cleaned.split(' ');
+
+    final timePart = parts[0];
+
+    String? period;
+
+    if (parts.length > 1) {
+      period = parts[1];
+    }
+
+    final hm = timePart.split(':');
+
+    int hour = int.parse(hm[0]);
+
+    int minute = hm.length > 1 ? int.parse(hm[1]) : 0;
+
+    if (period == 'PM' && hour != 12) {
+      hour += 12;
+    }
+
+    if (period == 'AM' && hour == 12) {
+      hour = 0;
+    }
+
+    return DateTime(2025, 1, 1, hour, minute);
+  }
+
   @override
   Widget build(BuildContext context) {
     final filtered = getFilteredSchedule();
@@ -406,6 +436,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
 
               itemCount: 15,
+              shrinkWrap: true,
 
               itemBuilder: (context, hourIndex) {
                 final hour = 8 + hourIndex;
@@ -413,16 +444,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 final filtered = getFilteredSchedule();
 
                 final events = filtered.where((event) {
-                  final start = event["start"]!.split(":");
-
-                  final eventHour = int.parse(start[0]);
-
-                  return eventHour == hour;
+                  final start = parseTime(event["start"]);
+                  return start.hour == hour;
                 }).toList();
 
                 return Container(
                   constraints: const BoxConstraints(minHeight: 140),
-
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
 
@@ -441,106 +468,176 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                       ),
 
                       Expanded(
-                        child: Column(
-                          children: [
-                            Container(height: 1, color: Colors.grey.shade300),
+                        child: SingleChildScrollView(
+                          child: SizedBox(
+                            height: 15 * 140,
 
-                            const SizedBox(height: 8),
+                            child: Stack(
+                              children: [
+                                ...List.generate(15, (index) {
+                                  final hour = 8 + index;
 
-                            ...events.map((event) {
-                              return GestureDetector(
-                                onLongPress: () async {
-                                  final confirm = await showDialog<bool>(
-                                    context: context,
+                                  return Positioned(
+                                    top: index * 140,
 
-                                    builder: (context) {
-                                      return AlertDialog(
-                                        title: const Text("Delete Event"),
+                                    left: 0,
+                                    right: 0,
 
-                                        content: Text(
-                                          "Delete ${event["title"]} ?",
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+
+                                      children: [
+                                        SizedBox(
+                                          width: 60,
+
+                                          child: Text(
+                                            "${hour.toString().padLeft(2, '0')}:00",
+
+                                            style: const TextStyle(
+                                              color: Colors.grey,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
                                         ),
 
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () {
-                                              Navigator.pop(context, false);
-                                            },
+                                        Expanded(
+                                          child: Container(
+                                            margin: const EdgeInsets.only(
+                                              top: 10,
+                                            ),
 
-                                            child: const Text("Cancel"),
+                                            height: 1,
+                                            color: Colors.grey.shade300,
                                           ),
-
-                                          ElevatedButton(
-                                            onPressed: () {
-                                              Navigator.pop(context, true);
-                                            },
-
-                                            child: const Text("Delete"),
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                  );
-
-                                  if (confirm != true) {
-                                    return;
-                                  }
-
-                                  setState(() {
-                                    schedule.remove(event);
-                                  });
-
-                                  await StorageService.saveSchedule(schedule);
-                                },
-
-                                child: Container(
-                                  width: double.infinity,
-
-                                  margin: const EdgeInsets.only(bottom: 8),
-
-                                  padding: const EdgeInsets.all(12),
-
-                                  decoration: BoxDecoration(
-                                    color: Color(
-                                      event["color"] ?? Colors.deepPurple.value,
+                                        ),
+                                      ],
                                     ),
+                                  );
+                                }),
 
-                                    borderRadius: BorderRadius.circular(18),
-                                  ),
+                                ...filtered.map((event) {
+                                  final start = parseTime(event["start"]);
+                                  final end = parseTime(event["end"]);
 
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                  final startMinutes =
+                                      (start.hour - 8) * 60 + start.minute;
 
-                                    children: [
-                                      Text(
-                                        event["title"]!,
+                                  final durationMinutes = end
+                                      .difference(start)
+                                      .inMinutes;
 
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
+                                  final top = startMinutes * (140 / 60);
 
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
+                                  final height = durationMinutes * (140 / 60);
+
+                                  return Positioned(
+                                    top: top,
+                                    left: 70,
+                                    right: 10,
+
+                                    child: GestureDetector(
+                                      onLongPress: () async {
+                                        final confirm = await showDialog<bool>(
+                                          context: context,
+
+                                          builder: (context) {
+                                            return AlertDialog(
+                                              title: const Text("Delete Event"),
+
+                                              content: Text(
+                                                "Delete ${event["title"]} ?",
+                                              ),
+
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () {
+                                                    Navigator.pop(
+                                                      context,
+                                                      false,
+                                                    );
+                                                  },
+
+                                                  child: const Text("Cancel"),
+                                                ),
+
+                                                ElevatedButton(
+                                                  onPressed: () {
+                                                    Navigator.pop(
+                                                      context,
+                                                      true,
+                                                    );
+                                                  },
+
+                                                  child: const Text("Delete"),
+                                                ),
+                                              ],
+                                            );
+                                          },
+                                        );
+
+                                        if (confirm != true) {
+                                          return;
+                                        }
+
+                                        setState(() {
+                                          schedule.remove(event);
+                                        });
+
+                                        await StorageService.saveSchedule(
+                                          schedule,
+                                        );
+                                      },
+
+                                      child: Container(
+                                        height: height,
+
+                                        padding: const EdgeInsets.all(12),
+
+                                        decoration: BoxDecoration(
+                                          color: Color(
+                                            event["color"] ??
+                                                Colors.deepPurple.value,
+                                          ),
+
+                                          borderRadius: BorderRadius.circular(
+                                            18,
+                                          ),
+                                        ),
+
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+
+                                          children: [
+                                            Text(
+                                              event["title"],
+
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+
+                                            const SizedBox(height: 6),
+
+                                            Text(
+                                              "${event["start"]} - ${event["end"]}",
+
+                                              style: const TextStyle(
+                                                color: Colors.white70,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
-
-                                      const SizedBox(height: 6),
-
-                                      Text(
-                                        "${event["start"]} - ${event["end"]}",
-
-                                        style: const TextStyle(
-                                          color: Colors.white70,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            }),
-                          ],
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     ],
