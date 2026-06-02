@@ -76,11 +76,21 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
   }
 
   DateTime? parseDeadlineDate(String date) {
+    // Try ISO format first (yyyy-MM-dd)
     try {
       return DateTime.parse(date);
-    } catch (e) {
-      return null;
-    }
+    } catch (_) {}
+    // Try d/M/yyyy format
+    try {
+      final parts = date.split("/");
+      if (parts.length == 3) {
+        final day = int.parse(parts[0]);
+        final month = int.parse(parts[1]);
+        final year = int.parse(parts[2]);
+        return DateTime(year, month, day);
+      }
+    } catch (_) {}
+    return null;
   }
 
   final titleController = TextEditingController();
@@ -145,7 +155,6 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
 
         "course": selectedCourse == "None" ? "" : selectedCourse,
 
-        "estimatedHours": estimatedHoursController.text,
         "estimatedHours": estimatedHoursController.text,
       });
       sortDeadlines();
@@ -616,7 +625,7 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
     editingIndex = index;
 
     titleController.text = item["title"] ?? "";
-    selectedDate = DateTime.parse(item["date"]);
+    selectedDate = parseDeadlineDate(item["date"] ?? "") ?? DateTime.now();
 
     selectedTime = TimeOfDay.now();
     estimatedHoursController.text = item["estimatedHours"] ?? "";
@@ -786,8 +795,6 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
                           ? ""
                           : selectedCourse;
 
-                      deadlines[index]["estimatedHours"] =
-                          estimatedHoursController.text;
                       deadlines[index]["estimatedHours"] =
                           estimatedHoursController.text;
                       sortDeadlines();

@@ -72,6 +72,28 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     }
   }
 
+  /// Parses a time string like "8:30 AM", "1:30 PM", or "13:30" into (hour, minute) in 24-hour format
+  (int, int) _parseTimeToHourMinute(String time) {
+    final cleaned = time.trim().toUpperCase();
+    final isPM = cleaned.contains("PM");
+    final isAM = cleaned.contains("AM");
+    final withoutPeriod = cleaned
+        .replaceAll("AM", "")
+        .replaceAll("PM", "")
+        .trim();
+    final parts = withoutPeriod.split(":");
+    int hour = int.parse(parts[0].trim());
+    int minute = parts.length > 1 ? int.parse(parts[1].trim()) : 0;
+
+    if (isPM && hour != 12) {
+      hour += 12;
+    }
+    if (isAM && hour == 12) {
+      hour = 0;
+    }
+    return (hour, minute);
+  }
+
   Future<void> addSchedule() async {
     if (titleController.text.isEmpty || startTime == null || endTime == null) {
       return;
@@ -85,23 +107,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         return false;
       }
 
-      final existingStartTime = TimeOfDay(
-        hour: int.parse(item["start"].split(":")[0]),
+      if (item["start"] == null || item["end"] == null) {
+        return false;
+      }
 
-        minute: int.parse(item["start"].split(":")[1].split(" ")[0]),
-      );
+      final (existingStartHour, existingStartMin) = _parseTimeToHourMinute(item["start"]);
+      final (existingEndHour, existingEndMin) = _parseTimeToHourMinute(item["end"]);
 
-      final existingEndTime = TimeOfDay(
-        hour: int.parse(item["end"].split(":")[0]),
-
-        minute: int.parse(item["end"].split(":")[1].split(" ")[0]),
-      );
-
-      final existingStartMinutes =
-          existingStartTime.hour * 60 + existingStartTime.minute;
-
-      final existingEndMinutes =
-          existingEndTime.hour * 60 + existingEndTime.minute;
+      final existingStartMinutes = existingStartHour * 60 + existingStartMin;
+      final existingEndMinutes = existingEndHour * 60 + existingEndMin;
 
       return !(newEnd <= existingStartMinutes ||
           newStart >= existingEndMinutes);
@@ -322,15 +336,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     }).toList();
 
     filtered.sort((a, b) {
-      final aStart = a["start"]!.split(":");
-
-      final bStart = b["start"]!.split(":");
-
-      final aHour = int.parse(aStart[0]);
-
-      final bHour = int.parse(bStart[0]);
-
-      return aHour.compareTo(bHour);
+      final (aHour, aMin) = _parseTimeToHourMinute(a["start"]!);
+      final (bHour, bMin) = _parseTimeToHourMinute(b["start"]!);
+      final aTotal = aHour * 60 + aMin;
+      final bTotal = bHour * 60 + bMin;
+      return aTotal.compareTo(bTotal);
     });
 
     return filtered;
@@ -368,6 +378,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Constants for the timeline
+    const double hourHeight = 60.0; // pixels per hour
+    const int startHour = 0;
+    const int endHour = 24;
+    const int totalHours = endHour - startHour; // 24 hours
+    const double totalHeight = totalHours * hourHeight;
+    const double timeColumnWidth = 50.0;
+
     final filtered = getFilteredSchedule();
 
     return Scaffold(
@@ -380,17 +398,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
       body: Column(
         children: [
+          // Day selector
           SizedBox(
-            height: 70,
-
+            height: 60,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
-
               itemCount: days.length,
-
               itemBuilder: (context, index) {
                 final day = days[index];
-
                 final selected = day == currentViewDay;
 
                 return GestureDetector(
@@ -399,29 +414,19 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                       currentViewDay = day;
                     });
                   },
-
                   child: Container(
-                    margin: const EdgeInsets.all(8),
-
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-
+                    margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
-                      color: selected
-                          ? Colors.deepPurple
-                          : Colors.grey.shade200,
-
+                      color: selected ? Colors.deepPurple : Colors.grey.shade200,
                       borderRadius: BorderRadius.circular(20),
                     ),
-
                     child: Center(
                       child: Text(
-                        day,
-
+                        day.substring(0, 3), // Show "Sun", "Mon", etc.
                         style: TextStyle(
                           color: selected ? Colors.white : Colors.black,
+                          fontWeight: selected ? FontWeight.bold : FontWeight.normal,
                         ),
                       ),
                     ),
@@ -431,219 +436,146 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             ),
           ),
 
+          // Timeline
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-
-              itemCount: 15,
-              shrinkWrap: true,
-
-              itemBuilder: (context, hourIndex) {
-                final hour = 8 + hourIndex;
-
-                final filtered = getFilteredSchedule();
-
-                final events = filtered.where((event) {
-                  final start = parseTime(event["start"]);
-                  return start.hour == hour;
-                }).toList();
-
-                return Container(
-                  constraints: const BoxConstraints(minHeight: 140),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-
-                    children: [
-                      SizedBox(
-                        width: 60,
-
-                        child: Text(
-                          "${hour.toString().padLeft(2, '0')}:00",
-
-                          style: const TextStyle(
-                            color: Colors.grey,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(bottom: 20),
+              child: SizedBox(
+                height: totalHeight,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Time labels column
+                    SizedBox(
+                      width: timeColumnWidth,
+                      height: totalHeight,
+                      child: Stack(
+                        children: List.generate(totalHours + 1, (index) {
+                          final hour = startHour + index;
+                          return Positioned(
+                            top: index * hourHeight - 8,
+                            left: 0,
+                            right: 0,
+                            child: Text(
+                              "${hour.toString().padLeft(2, '0')}:00",
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          );
+                        }),
                       ),
+                    ),
 
-                      Expanded(
-                        child: SingleChildScrollView(
-                          child: SizedBox(
-                            height: 15 * 140,
+                    // Events area
+                    Expanded(
+                      child: SizedBox(
+                        height: totalHeight,
+                        child: Stack(
+                          children: [
+                            // Hour grid lines
+                            ...List.generate(totalHours + 1, (index) {
+                              return Positioned(
+                                top: index * hourHeight,
+                                left: 0,
+                                right: 0,
+                                child: Container(
+                                  height: 0.5,
+                                  color: Colors.grey.shade300,
+                                ),
+                              );
+                            }),
 
-                            child: Stack(
-                              children: [
-                                ...List.generate(15, (index) {
-                                  final hour = 8 + index;
+                            // Event blocks
+                            ...filtered.map((event) {
+                              final start = parseTime(event["start"]);
+                              final end = parseTime(event["end"]);
 
-                                  return Positioned(
-                                    top: index * 140,
+                              final startMinutes = (start.hour - startHour) * 60 + start.minute;
+                              final durationMinutes = end.difference(start).inMinutes;
 
-                                    left: 0,
-                                    right: 0,
+                              final top = startMinutes * (hourHeight / 60);
+                              final height = durationMinutes * (hourHeight / 60);
 
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-
-                                      children: [
-                                        SizedBox(
-                                          width: 60,
-
-                                          child: Text(
-                                            "${hour.toString().padLeft(2, '0')}:00",
-
-                                            style: const TextStyle(
-                                              color: Colors.grey,
-                                              fontWeight: FontWeight.bold,
+                              return Positioned(
+                                top: top,
+                                left: 4,
+                                right: 4,
+                                child: GestureDetector(
+                                  onLongPress: () async {
+                                    final confirm = await showDialog<bool>(
+                                      context: context,
+                                      builder: (context) {
+                                        return AlertDialog(
+                                          title: const Text("Delete Event"),
+                                          content: Text("Delete ${event["title"]}?"),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(context, false),
+                                              child: const Text("Cancel"),
                                             ),
-                                          ),
-                                        ),
-
-                                        Expanded(
-                                          child: Container(
-                                            margin: const EdgeInsets.only(
-                                              top: 10,
-                                            ),
-
-                                            height: 1,
-                                            color: Colors.grey.shade300,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                }),
-
-                                ...filtered.map((event) {
-                                  final start = parseTime(event["start"]);
-                                  final end = parseTime(event["end"]);
-
-                                  final startMinutes =
-                                      (start.hour - 8) * 60 + start.minute;
-
-                                  final durationMinutes = end
-                                      .difference(start)
-                                      .inMinutes;
-
-                                  final top = startMinutes * (140 / 60);
-
-                                  final height = durationMinutes * (140 / 60);
-
-                                  return Positioned(
-                                    top: top,
-                                    left: 70,
-                                    right: 10,
-
-                                    child: GestureDetector(
-                                      onLongPress: () async {
-                                        final confirm = await showDialog<bool>(
-                                          context: context,
-
-                                          builder: (context) {
-                                            return AlertDialog(
-                                              title: const Text("Delete Event"),
-
-                                              content: Text(
-                                                "Delete ${event["title"]} ?",
-                                              ),
-
-                                              actions: [
-                                                TextButton(
-                                                  onPressed: () {
-                                                    Navigator.pop(
-                                                      context,
-                                                      false,
-                                                    );
-                                                  },
-
-                                                  child: const Text("Cancel"),
-                                                ),
-
-                                                ElevatedButton(
-                                                  onPressed: () {
-                                                    Navigator.pop(
-                                                      context,
-                                                      true,
-                                                    );
-                                                  },
-
-                                                  child: const Text("Delete"),
-                                                ),
-                                              ],
-                                            );
-                                          },
-                                        );
-
-                                        if (confirm != true) {
-                                          return;
-                                        }
-
-                                        setState(() {
-                                          schedule.remove(event);
-                                        });
-
-                                        await StorageService.saveSchedule(
-                                          schedule,
-                                        );
-                                      },
-
-                                      child: Container(
-                                        height: height,
-
-                                        padding: const EdgeInsets.all(12),
-
-                                        decoration: BoxDecoration(
-                                          color: Color(
-                                            event["color"] ??
-                                                Colors.deepPurple.value,
-                                          ),
-
-                                          borderRadius: BorderRadius.circular(
-                                            18,
-                                          ),
-                                        ),
-
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-
-                                          children: [
-                                            Text(
-                                              event["title"],
-
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-
-                                            const SizedBox(height: 6),
-
-                                            Text(
-                                              "${event["start"]} - ${event["end"]}",
-
-                                              style: const TextStyle(
-                                                color: Colors.white70,
-                                              ),
+                                            ElevatedButton(
+                                              onPressed: () => Navigator.pop(context, true),
+                                              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                              child: const Text("Delete"),
                                             ),
                                           ],
-                                        ),
-                                      ),
+                                        );
+                                      },
+                                    );
+
+                                    if (confirm != true) return;
+
+                                    setState(() {
+                                      schedule.remove(event);
+                                    });
+                                    await StorageService.saveSchedule(schedule);
+                                  },
+                                  child: Container(
+                                    height: height < 30 ? 30 : height,
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Color(event["color"] ?? Colors.deepPurple.value),
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
-                                  );
-                                }),
-                              ],
-                            ),
-                          ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          event["title"] ?? "",
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        if (height > 40)
+                                          Text(
+                                            "${event["start"]} - ${event["end"]}",
+                                            style: const TextStyle(
+                                              color: Colors.white70,
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
-                );
-              },
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],

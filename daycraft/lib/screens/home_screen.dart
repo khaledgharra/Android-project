@@ -342,6 +342,28 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Parses a time string like "8:30 AM", "1:30 PM", or "13:30" into 24-hour (hour, minute)
+  (int, int) _parseTime(String time) {
+    final cleaned = time.trim().toUpperCase();
+    final isPM = cleaned.contains("PM");
+    final isAM = cleaned.contains("AM");
+    final withoutPeriod = cleaned
+        .replaceAll("AM", "")
+        .replaceAll("PM", "")
+        .trim();
+    final parts = withoutPeriod.split(":");
+    int hour = int.parse(parts[0].trim());
+    int minute = parts.length > 1 ? int.parse(parts[1].trim()) : 0;
+
+    if (isPM && hour != 12) {
+      hour += 12;
+    }
+    if (isAM && hour == 12) {
+      hour = 0;
+    }
+    return (hour, minute);
+  }
+
   Future<void> loadTodayTasks() async {
     final allTasks = await StorageService.loadSchedule();
 
@@ -359,11 +381,9 @@ class _HomeScreenState extends State<HomeScreen> {
         continue;
       }
 
-      final start = task["start"]!.split(":");
+      if (task["start"] == null) continue;
 
-      final taskHour = int.parse(start[0]);
-
-      final taskMinute = int.parse(start[1]);
+      final (taskHour, taskMinute) = _parseTime(task["start"]!);
 
       final isUpcoming =
           taskHour > currentHour ||
@@ -374,24 +394,47 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
 
+    if (!mounted) return;
     setState(() {
       todayTasks = filtered;
     });
   }
 
+  /// Parses a date string in either "yyyy-MM-dd" or "d/M/yyyy" format
+  DateTime? _parseDeadlineDate(String? dateStr) {
+    if (dateStr == null || dateStr.isEmpty) return null;
+    // Try ISO format first (yyyy-MM-dd)
+    try {
+      return DateTime.parse(dateStr);
+    } catch (_) {}
+    // Try d/M/yyyy format
+    try {
+      final parts = dateStr.split("/");
+      if (parts.length == 3) {
+        final day = int.parse(parts[0]);
+        final month = int.parse(parts[1]);
+        final year = int.parse(parts[2]);
+        return DateTime(year, month, day);
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Future<void> loadUpcomingDeadlines() async {
     final allDeadlines = await StorageService.loadDeadlines();
 
-    allDeadlines.sort((a, b) {
-      final aDate = DateTime.parse(a["date"]);
+    // Filter out deadlines with unparseable dates
+    final withDates = allDeadlines.where((d) => _parseDeadlineDate(d["date"]) != null).toList();
 
-      final bDate = DateTime.parse(b["date"]);
-
+    withDates.sort((a, b) {
+      final aDate = _parseDeadlineDate(a["date"])!;
+      final bDate = _parseDeadlineDate(b["date"])!;
       return aDate.compareTo(bDate);
     });
 
+    if (!mounted) return;
     setState(() {
-      upcomingDeadlines = allDeadlines.take(3).toList();
+      upcomingDeadlines = withDates.take(3).toList();
     });
   }
 
