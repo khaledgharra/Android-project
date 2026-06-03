@@ -138,34 +138,45 @@ class _DeadlineDetailsScreenState extends State<DeadlineDetailsScreen> {
               itemBuilder: (context, index) {
                 final subtask = subtasks[index];
 
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 10),
+                return Dismissible(
+                  key: ValueKey(subtask["title"]),
+                  direction: DismissDirection.endToStart,
 
-                  child: ListTile(
-                    leading: Checkbox(
-                      value: subtask["done"],
+                  background: Container(
+                    color: Colors.red,
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.only(right: 20),
+                    child: const Icon(Icons.delete, color: Colors.white),
+                  ),
 
-                      onChanged: (value) async {
-                        setState(() {
-                          subtasks[index]["done"] = value;
-                        });
+                  onDismissed: (direction) async {
+                    setState(() {
+                      subtasks.removeAt(index);
+                    });
 
-                        await saveSubtasks();
-                      },
-                    ),
+                    await saveSubtasks();
 
-                    title: Text(subtask["title"]),
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Subtask deleted')),
+                    );
+                  },
 
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
+                  child: Card(
+                    margin: const EdgeInsets.only(bottom: 10),
 
-                      onPressed: () async {
-                        setState(() {
-                          subtasks.removeAt(index);
-                        });
+                    child: ListTile(
+                      leading: Checkbox(
+                        value: subtask["done"],
+                        onChanged: (value) async {
+                          setState(() {
+                            subtasks[index]["done"] = value;
+                          });
 
-                        await saveSubtasks();
-                      },
+                          await saveSubtasks();
+                        },
+                      ),
+
+                      title: Text(subtask["title"]),
                     ),
                   ),
                 );
