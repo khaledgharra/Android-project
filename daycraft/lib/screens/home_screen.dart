@@ -18,10 +18,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final TextEditingController taskController = TextEditingController();
 
+  // Premium design theme configurations
+  final Color backgroundColor = const Color(0xFFFDFBF7); // Soft Ivory/Cream
+  final Color primaryAccent = Colors.deepPurple;
+  final Color cardColor = Colors.white;
+
   @override
   void initState() {
     super.initState();
-
     loadTodayTasks();
     loadUpcomingDeadlines();
   }
@@ -29,285 +33,109 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: backgroundColor,
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: 0,
-
         type: BottomNavigationBarType.fixed,
-
-        selectedItemColor: Colors.deepPurple,
-        unselectedItemColor: Colors.grey,
-
-        backgroundColor: Colors.white,
-
+        selectedItemColor: primaryAccent,
+        unselectedItemColor: Colors.grey.shade400,
+        backgroundColor: cardColor,
+        elevation: 8,
         onTap: (index) {
           if (index == 1) {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const ScheduleScreen()),
-            ).then((_) {
-              loadTodayTasks();
-            });
+            ).then((_) => loadTodayTasks());
           }
-
           if (index == 2) {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const CoursesScreen()),
             );
           }
-
           if (index == 3) {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const DeadlinesScreen()),
-            ).then((_) {
-              loadUpcomingDeadlines();
-            });
+            ).then((_) => loadUpcomingDeadlines());
           }
         },
-
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
-
-          BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_today),
-            label: "Calendar",
-          ),
-
-          BottomNavigationBarItem(icon: Icon(Icons.school), label: "Courses"),
-
-          BottomNavigationBarItem(
-            icon: Icon(Icons.warning),
-            label: "Deadlines",
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: "Home"),
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_today_rounded), label: "Calendar"),
+          BottomNavigationBarItem(icon: Icon(Icons.school_rounded), label: "Courses"),
+          BottomNavigationBarItem(icon: Icon(Icons.warning_amber_rounded), label: "Deadlines"),
         ],
       ),
-
-      /*floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          showDialog(
-            context: context,
-            builder: (context) {
-              return AlertDialog(
-                title: const Text("Add Task"),
-
-                content: TextField(
-                  controller: taskController,
-                  decoration: const InputDecoration(
-                    hintText: "Enter task name",
-                  ),
-                ),
-
-                actions: [
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    child: const Text("Cancel"),
-                  ),
-
-                  ElevatedButton(
-                    onPressed: () {
-                      if (taskController.text.trim().isEmpty) {
-                        return;
-                      }
-
-                      setState(() {
-                        tasks.add(Task(title: taskController.text));
-                      });
-
-                      taskController.clear();
-
-                      Navigator.pop(context);
-                    },
-                    child: const Text("Add"),
-                  ),
-                ],
-              );
-            },
-          );
-        },
-        child: const Icon(Icons.add),
-      ),*/
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-
-          child: SingleChildScrollView(
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 20),
-
-                Text(
-                  getGreeting(),
-                  style: TextStyle(fontSize: 18, color: Colors.grey),
-                ),
-
-                const SizedBox(height: 8),
-
-                Text(
-                  getFormattedDate(),
-                  style: const TextStyle(fontSize: 18, color: Colors.grey),
-                ),
-
-                const SizedBox(height: 8),
-
-                // Logout button
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: IconButton(
-                    icon: const Icon(Icons.logout, color: Colors.grey),
-                    tooltip: "Logout",
-                    onPressed: () async {
-                      final confirm = await showDialog<bool>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text("Logout"),
-                          content: const Text(
-                            "Are you sure you want to logout?",
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context, false),
-                              child: const Text("Cancel"),
-                            ),
-                            ElevatedButton(
-                              onPressed: () => Navigator.pop(context, true),
-                              child: const Text("Logout"),
-                            ),
-                          ],
-                        ),
-                      );
-                      if (confirm == true) {
-                        await AuthService.signOut();
-                      }
-                    },
-                  ),
-                ),
-
-                const SizedBox(height: 4),
-
+                // --- TOP ROW: GREETINGS & LOGOUT ---
                 Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
                   children: [
-                    Flexible(
-                      child: Text(
-                        _getUserDisplayName(),
-
-                        style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-
                       children: [
-                        const Text(
-                          "Upcoming Deadlines",
-
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.black,
-                            fontWeight: FontWeight.w500,
-                          ),
+                        Text(
+                          getGreeting(),
+                          style: TextStyle(fontSize: 16, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
                         ),
-
-                        const SizedBox(height: 2),
-
-                        SizedBox(
-                          height: 60,
-                          width: 170,
-
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-
-                            itemCount: upcomingDeadlines.take(2).length,
-
-                            itemBuilder: (context, index) {
-                              final item = upcomingDeadlines[index];
-
-                              return Container(
-                                width: 80,
-
-                                margin: const EdgeInsets.only(left: 4),
-
-                                padding: const EdgeInsets.all(10),
-
-                                decoration: BoxDecoration(
-                                  color: Colors.red,
-
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-
-                                  children: [
-                                    Text(
-                                      item["title"]!,
-
-                                      maxLines: 1,
-
-                                      overflow: TextOverflow.ellipsis,
-
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-
-                                    const Spacer(),
-
-                                    Text(
-                                      item["date"]!,
-
-                                      style: const TextStyle(fontSize: 10),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _getUserDisplayName(),
+                          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5),
                         ),
                       ],
                     ),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: cardColor,
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+                        ],
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.logout_rounded, color: Colors.grey),
+                        tooltip: "Logout",
+                        onPressed: _handleLogout,
+                      ),
+                    ),
                   ],
                 ),
+                const SizedBox(height: 12),
+                
+                // Static Contextual Date Header
+                Text(
+                  getFormattedDate(),
+                  style: TextStyle(fontSize: 15, color: primaryAccent.withOpacity(0.8), fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 28),
 
-                const SizedBox(height: 10),
-
+                // --- MID SECTION: HORIZONTAL URGENT DEADLINES ---
                 const Text(
-                  "Today's Tasks",
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  "Urgent Deadlines ⚡",
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: -0.3),
                 ),
+                const SizedBox(height: 14),
+                _buildDeadlinesCarousel(),
+                const SizedBox(height: 32),
 
-                const SizedBox(height: 20),
-
-                SizedBox(
-                  height: 220,
-
-                  child: ListView.builder(
-                    physics: const NeverScrollableScrollPhysics(),
-
-                    itemCount: todayTasks.length,
-
-                    itemBuilder: (context, index) {
-                      final task = todayTasks[index];
-
-                      return scheduleCard(task);
-                    },
-                  ),
+                // --- BOTTOM SECTION: TODAY'S EXECUTION TIMELINE ---
+                const Text(
+                  "Today's Schedule 📅",
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: -0.3),
                 ),
-
-                const SizedBox(height: 30),
+                const SizedBox(height: 14),
+                _buildTasksTimeline(),
+                const SizedBox(height: 24),
               ],
             ),
           ),
@@ -316,78 +144,207 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // Horizontal Carousel for Deadlines
+  Widget _buildDeadlinesCarousel() {
+    if (upcomingDeadlines.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: const Text("🎉 No urgent deadlines coming up!", style: TextStyle(color: Colors.grey)),
+      );
+    }
+
+    return SizedBox(
+      height: 100,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        itemCount: upcomingDeadlines.take(3).length,
+        itemBuilder: (context, index) {
+          final item = upcomingDeadlines[index];
+          return Container(
+            width: 190,
+            margin: const EdgeInsets.only(right: 14, bottom: 6),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.red.withOpacity(0.08),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+              border: Border.all(color: Colors.red.shade300, width: 2),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  item["title"]?.toString() ?? "Untitled",
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.black87),
+                ),
+                const Spacer(),
+                Row(
+                  children: [
+                    Icon(Icons.access_time_rounded, size: 12, color: Colors.red.shade400),
+                    const SizedBox(width: 4),
+                    Text(
+                      item["date"]?.toString() ?? "N/A",
+                      style: TextStyle(fontSize: 12, color: Colors.red.shade400, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // Clean Task Stack View
+  Widget _buildTasksTimeline() {
+    if (todayTasks.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4)),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: todayTasks.length,
+      itemBuilder: (context, index) {
+        final task = todayTasks[index];
+        return scheduleCard(task);
+      },
+    );
+  }
+
   Widget scheduleCard(Map<String, dynamic> task) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(20),
-
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.deepPurple.shade50,
+        color: cardColor,
         borderRadius: BorderRadius.circular(20),
-      ),
-
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            task["title"]!,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
           ),
-
-          const SizedBox(height: 8),
-
-          Text("${task["start"]} - ${task["end"]}"),
+        ],
+        border: Border.all(color: Colors.grey.shade100),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 45,
+            decoration: BoxDecoration(
+              color: primaryAccent.withOpacity(0.6),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  task["title"]!,
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  "${task["start"]} - ${task["end"]}",
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  /// Parses a time string like "8:30 AM", "1:30 PM", or "13:30" into 24-hour (hour, minute)
+  Future<void> _handleLogout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("Logout"),
+        content: const Text("Are you sure you want to logout?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade400,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Logout"),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await AuthService.signOut();
+    }
+  }
+
+  // --- Core Parsers & Helpers ---
   (int, int) _parseTime(String time) {
     final cleaned = time.trim().toUpperCase();
     final isPM = cleaned.contains("PM");
     final isAM = cleaned.contains("AM");
-    final withoutPeriod = cleaned
-        .replaceAll("AM", "")
-        .replaceAll("PM", "")
-        .trim();
+    final withoutPeriod = cleaned.replaceAll("AM", "").replaceAll("PM", "").trim();
     final parts = withoutPeriod.split(":");
     int hour = int.parse(parts[0].trim());
     int minute = parts.length > 1 ? int.parse(parts[1].trim()) : 0;
 
-    if (isPM && hour != 12) {
-      hour += 12;
-    }
-    if (isAM && hour == 12) {
-      hour = 0;
-    }
+    if (isPM && hour != 12) hour += 12;
+    if (isAM && hour == 12) hour = 0;
     return (hour, minute);
   }
 
   Future<void> loadTodayTasks() async {
     final allTasks = await StorageService.loadSchedule();
-
     final now = DateTime.now();
-
     final currentDay = getDayName(now.weekday);
-
     final currentHour = now.hour;
     final currentMinute = now.minute;
 
     List<Map<String, dynamic>> filtered = [];
-
     for (var task in allTasks) {
-      if (task["day"] != currentDay) {
-        continue;
-      }
-
+      if (task["day"] != currentDay) continue;
       if (task["start"] == null) continue;
 
       final (taskHour, taskMinute) = _parseTime(task["start"]!);
-
-      final isUpcoming =
-          taskHour > currentHour ||
-          (taskHour == currentHour && taskMinute >= currentMinute);
+      final isUpcoming = taskHour > currentHour || (taskHour == currentHour && taskMinute >= currentMinute);
 
       if (isUpcoming) {
         filtered.add(task);
@@ -395,104 +352,81 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (!mounted) return;
-    setState(() {
-      todayTasks = filtered;
-    });
+    setState(() => todayTasks = filtered);
   }
 
-  /// Parses a date string in either "yyyy-MM-dd" or "d/M/yyyy" format
   DateTime? _parseDeadlineDate(String? dateStr) {
     if (dateStr == null || dateStr.isEmpty) return null;
-    // Try ISO format first (yyyy-MM-dd)
-    try {
-      return DateTime.parse(dateStr);
-    } catch (_) {}
-    // Try d/M/yyyy format
+    try { 
+      final parsed = DateTime.parse(dateStr);
+      print("DEBUG: Parsed ISO format: $dateStr -> $parsed");
+      return parsed;
+    } catch (e) {
+      print("DEBUG: Failed to parse ISO format: $dateStr, error: $e");
+    }
     try {
       final parts = dateStr.split("/");
       if (parts.length == 3) {
-        final day = int.parse(parts[0]);
-        final month = int.parse(parts[1]);
-        final year = int.parse(parts[2]);
-        return DateTime(year, month, day);
+        final parsed = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+        print("DEBUG: Parsed d/M/yyyy format: $dateStr -> $parsed");
+        return parsed;
       }
-    } catch (_) {}
+    } catch (e) {
+      print("DEBUG: Failed to parse d/M/yyyy format: $dateStr, error: $e");
+    }
+    print("DEBUG: Could not parse date: $dateStr");
     return null;
   }
 
+  // Filter and display upcoming deadlines
   Future<void> loadUpcomingDeadlines() async {
     final allDeadlines = await StorageService.loadDeadlines();
-
-    // Filter out deadlines with unparseable dates
-    final withDates = allDeadlines.where((d) => _parseDeadlineDate(d["date"]) != null).toList();
-
-    withDates.sort((a, b) {
-      final aDate = _parseDeadlineDate(a["date"])!;
-      final bDate = _parseDeadlineDate(b["date"])!;
-      return aDate.compareTo(bDate);
-    });
+    print("========== DEBUG: All deadlines loaded ==========");
+    print("Total deadlines: ${allDeadlines.length}");
+    for (var i = 0; i < allDeadlines.length; i++) {
+      print("Deadline $i: ${allDeadlines[i]}");
+    }
 
     if (!mounted) return;
+    // For now, just show ALL deadlines without filtering to test
     setState(() {
-      upcomingDeadlines = withDates.take(3).toList();
+      upcomingDeadlines = allDeadlines;
     });
+    print("========== setState called, upcomingDeadlines.length = ${upcomingDeadlines.length} ==========");
   }
 
   String getDayName(int weekday) {
     switch (weekday) {
-      case 1:
-        return "Monday";
-      case 2:
-        return "Tuesday";
-      case 3:
-        return "Wednesday";
-      case 4:
-        return "Thursday";
-      case 5:
-        return "Friday";
-      case 6:
-        return "Saturday";
-      case 7:
-        return "Sunday";
-      default:
-        return "";
+      case 1: return "Monday";
+      case 2: return "Tuesday";
+      case 3: return "Wednesday";
+      case 4: return "Thursday";
+      case 5: return "Friday";
+      case 6: return "Saturday";
+      case 7: return "Sunday";
+      default: return "";
     }
   }
 
   String getGreeting() {
     final hour = DateTime.now().hour;
-
-    if (hour < 12) {
-      return "Good Morning ☀️";
-    }
-
-    if (hour < 18) {
-      return "Good Afternoon 🌤";
-    }
-
+    if (hour < 12) return "Good Morning ☀️";
+    if (hour < 18) return "Good Afternoon 🌤";
     return "Good Evening 🌙";
   }
 
   String getFormattedDate() {
     final now = DateTime.now();
-
     final day = getDayName(now.weekday);
-
-    return "$day, "
-        "${now.day}/${now.month}/${now.year}";
+    return "$day, ${now.day}/${now.month}/${now.year}";
   }
 
   String _getUserDisplayName() {
     final user = AuthService.currentUser;
     if (user == null) return "Student";
-    if (user.displayName != null && user.displayName!.isNotEmpty) {
-      return user.displayName!;
-    }
-    // Use the part before @ in email
+    if (user.displayName != null && user.displayName!.isNotEmpty) return user.displayName!;
     final email = user.email ?? "";
-    if (email.contains("@")) {
-      return email.split("@")[0];
-    }
+    if (email.contains("@")) return email.split("@")[0];
     return "Student";
   }
 }
