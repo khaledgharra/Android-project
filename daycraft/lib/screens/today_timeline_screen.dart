@@ -6,10 +6,10 @@ class TodayTimelineScreen extends StatefulWidget {
   const TodayTimelineScreen({super.key});
 
   @override
-  State<TodayTimelineScreen> createState() => _TodayTimelineScreenState();
+  State<TodayTimelineScreen> createState() => TodayTimelineScreenState();
 }
 
-class _TodayTimelineScreenState extends State<TodayTimelineScreen> {
+class TodayTimelineScreenState extends State<TodayTimelineScreen> {
   List<Map<String, dynamic>> todayEvents = [];
   bool isLoading = true;
   Timer? _timeUpdateTimer;
@@ -152,27 +152,17 @@ class _TodayTimelineScreenState extends State<TodayTimelineScreen> {
       }
     }
 
-    // Find gaps
+    // Find gaps — show all gaps ≥30 min (past and future) so they're visible on timeline
     int prevEnd = searchStart;
     for (var slot in merged) {
       if (slot.$1 > prevEnd) {
         final gapDuration = slot.$1 - prevEnd;
         if (gapDuration >= 30) {
-          // Only show future or currently active windows
-          if (slot.$1 > currentMinutes || (prevEnd <= currentMinutes && slot.$1 > currentMinutes)) {
-            windows.add({
-              "startMinutes": prevEnd,
-              "endMinutes": slot.$1,
-              "duration": gapDuration,
-            });
-          } else if (prevEnd <= currentMinutes && slot.$1 > currentMinutes) {
-            // Partial window (started in past, extends into future)
-            windows.add({
-              "startMinutes": currentMinutes,
-              "endMinutes": slot.$1,
-              "duration": slot.$1 - currentMinutes,
-            });
-          }
+          windows.add({
+            "startMinutes": prevEnd,
+            "endMinutes": slot.$1,
+            "duration": gapDuration,
+          });
         }
       }
       prevEnd = slot.$2;
@@ -181,7 +171,7 @@ class _TodayTimelineScreenState extends State<TodayTimelineScreen> {
     // Gap after last event until end of day
     if (prevEnd < searchEnd) {
       final gapDuration = searchEnd - prevEnd;
-      if (gapDuration >= 30 && prevEnd >= currentMinutes - 60) {
+      if (gapDuration >= 30) {
         windows.add({
           "startMinutes": prevEnd,
           "endMinutes": searchEnd,

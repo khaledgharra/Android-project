@@ -15,14 +15,21 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+  final GlobalKey<TodayTimelineScreenState> _todayKey = GlobalKey<TodayTimelineScreenState>();
 
-  final List<Widget> _screens = const [
-    _DashboardTab(),
-    TodayTimelineScreen(),
-    ScheduleScreen(),
-    CoursesScreen(),
-    DeadlinesScreen(),
-  ];
+  late final List<Widget> _screens;
+
+  @override
+  void initState() {
+    super.initState();
+    _screens = [
+      const _DashboardTab(),
+      TodayTimelineScreen(key: _todayKey),
+      const ScheduleScreen(),
+      const CoursesScreen(),
+      const DeadlinesScreen(),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +47,10 @@ class _HomeScreenState extends State<HomeScreen> {
         elevation: 8,
         onTap: (index) {
           setState(() => _currentIndex = index);
+          // Refresh Today tab when switching to it
+          if (index == 1) {
+            _todayKey.currentState?.loadTodayEvents();
+          }
         },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: "Home"),
