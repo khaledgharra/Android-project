@@ -30,16 +30,11 @@ class _CourseDetailsScreenState
   }
 
   Future<void> loadCourseDeadlines() async {
+    final deadlines = await StorageService.loadDeadlines();
+    if (!mounted) return;
 
-    final deadlines =
-        await StorageService
-            .loadDeadlines();
-
-    final filtered =
-        deadlines.where((item) {
-
-      return item["course"] ==
-          widget.courseName;
+    final filtered = deadlines.where((item) {
+      return item["course"] == widget.courseName;
     }).toList();
 
     setState(() {

@@ -47,6 +47,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
 
   Future<void> loadCourses() async {
     final loaded = await StorageService.loadSchedule();
+    if (!mounted) return;
 
     final onlyCourses = loaded
         .where((item) => item["type"] == "Course" && item["name"] != null)

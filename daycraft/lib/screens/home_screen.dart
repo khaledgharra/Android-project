@@ -225,6 +225,9 @@ class _HomeScreenState extends State<HomeScreen> {
             BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4)),
           ],
         ),
+        child: const Center(
+          child: Text("No more tasks today 🎉", style: TextStyle(color: Colors.grey)),
+        ),
       );
     }
 
@@ -271,12 +274,12 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  task["title"]!,
+                  task["title"] ?? "",
                   style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  "${task["start"]} - ${task["end"]}",
+                  "${task["start"] ?? ""} - ${task["end"] ?? ""}",
                   style: TextStyle(fontSize: 13, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
                 ),
               ],
@@ -357,42 +360,42 @@ class _HomeScreenState extends State<HomeScreen> {
 
   DateTime? _parseDeadlineDate(String? dateStr) {
     if (dateStr == null || dateStr.isEmpty) return null;
-    try { 
-      final parsed = DateTime.parse(dateStr);
-      print("DEBUG: Parsed ISO format: $dateStr -> $parsed");
-      return parsed;
-    } catch (e) {
-      print("DEBUG: Failed to parse ISO format: $dateStr, error: $e");
-    }
+    try {
+      return DateTime.parse(dateStr);
+    } catch (_) {}
     try {
       final parts = dateStr.split("/");
       if (parts.length == 3) {
-        final parsed = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
-        print("DEBUG: Parsed d/M/yyyy format: $dateStr -> $parsed");
-        return parsed;
+        return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
       }
-    } catch (e) {
-      print("DEBUG: Failed to parse d/M/yyyy format: $dateStr, error: $e");
-    }
-    print("DEBUG: Could not parse date: $dateStr");
+    } catch (_) {}
     return null;
   }
 
   // Filter and display upcoming deadlines
   Future<void> loadUpcomingDeadlines() async {
     final allDeadlines = await StorageService.loadDeadlines();
-    print("========== DEBUG: All deadlines loaded ==========");
-    print("Total deadlines: ${allDeadlines.length}");
-    for (var i = 0; i < allDeadlines.length; i++) {
-      print("Deadline $i: ${allDeadlines[i]}");
-    }
+    final now = DateTime.now();
+
+    // Filter to only show deadlines that haven't passed yet
+    final upcoming = allDeadlines.where((d) {
+      final date = _parseDeadlineDate(d["date"]?.toString());
+      if (date == null) return true; // Show if we can't parse (safety)
+      return date.isAfter(now.subtract(const Duration(days: 1)));
+    }).toList();
+
+    // Sort by date (soonest first)
+    upcoming.sort((a, b) {
+      final dateA = _parseDeadlineDate(a["date"]?.toString());
+      final dateB = _parseDeadlineDate(b["date"]?.toString());
+      if (dateA == null || dateB == null) return 0;
+      return dateA.compareTo(dateB);
+    });
 
     if (!mounted) return;
-    // For now, just show ALL deadlines without filtering to test
     setState(() {
-      upcomingDeadlines = allDeadlines;
+      upcomingDeadlines = upcoming;
     });
-    print("========== setState called, upcomingDeadlines.length = ${upcomingDeadlines.length} ==========");
   }
 
   String getDayName(int weekday) {

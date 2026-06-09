@@ -34,42 +34,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   @override
   void initState() {
     super.initState();
-
     loadSchedule();
   }
 
   Future<void> loadSchedule() async {
     final loaded = await StorageService.loadSchedule();
-
+    if (!mounted) return;
     setState(() {
       schedule = loaded;
     });
-  }
-
-  Future<void> pickStartTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.now(),
-    );
-
-    if (picked != null) {
-      setState(() {
-        startTime = picked;
-      });
-    }
-  }
-
-  Future<void> pickEndTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.now(),
-    );
-
-    if (picked != null) {
-      setState(() {
-        endTime = picked;
-      });
-    }
   }
 
   /// Parses a time string like "8:30 AM", "1:30 PM", or "13:30" into (hour, minute) in 24-hour format
@@ -99,7 +72,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       return;
     }
     final newStart = startTime!.hour * 60 + startTime!.minute;
-
     final newEnd = endTime!.hour * 60 + endTime!.minute;
 
     final overlapping = schedule.any((item) {
@@ -117,34 +89,39 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       final existingStartMinutes = existingStartHour * 60 + existingStartMin;
       final existingEndMinutes = existingEndHour * 60 + existingEndMin;
 
-      return !(newEnd <= existingStartMinutes ||
-          newStart >= existingEndMinutes);
+      return !(newEnd <= existingStartMinutes || newStart >= existingEndMinutes);
     });
 
     if (overlapping) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("This activity overlaps with another schedule item"),
         ),
       );
-
       return;
     }
 
+    final newItem = {
+      "title": titleController.text,
+      "type": selectedType,
+      "day": selectedDay,
+      "start": startTime!.format(context),
+      "end": endTime!.format(context),
+    };
+
+    // Add to Firestore and get the document ID
+    final docId = await StorageService.addScheduleItem(newItem);
+    if (docId != null) {
+      newItem['id'] = docId;
+    }
+
+    if (!mounted) return;
     setState(() {
-      schedule.add({
-        "title": titleController.text,
-        "type": selectedType,
-        "day": selectedDay,
-        "start": startTime!.format(context),
-        "end": endTime!.format(context),
-      });
+      schedule.add(newItem);
     });
 
-    await StorageService.saveSchedule(schedule);
-
     titleController.clear();
-
     Navigator.pop(context);
   }
 
@@ -251,7 +228,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
                                     decoration: BoxDecoration(
                                       color: Colors.white,
-
                                       borderRadius: BorderRadius.circular(12),
                                     ),
 
@@ -286,7 +262,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
                                     decoration: BoxDecoration(
                                       color: Colors.white,
-
                                       borderRadius: BorderRadius.circular(12),
                                     ),
 
@@ -423,7 +398,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                     ),
                     child: Center(
                       child: Text(
-                        day.substring(0, 3), // Show "Sun", "Mon", etc.
+                        day.substring(0, 3),
                         style: TextStyle(
                           color: selected ? Colors.white : Colors.black,
                           fontWeight: selected ? FontWeight.bold : FontWeight.normal,
@@ -529,10 +504,16 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
                                     if (confirm != true) return;
 
+                                    // Delete from Firestore using document ID
+                                    final docId = event['id'];
+                                    if (docId != null) {
+                                      await StorageService.deleteScheduleItem(docId);
+                                    }
+
+                                    if (!mounted) return;
                                     setState(() {
                                       schedule.remove(event);
                                     });
-                                    await StorageService.saveSchedule(schedule);
                                   },
                                   child: Container(
                                     height: height < 30 ? 30 : height,
