@@ -119,6 +119,7 @@ class CoursesScreenState extends State<CoursesScreen> {
                     ),
 
                     child: ListTile(
+                      tileColor: Colors.transparent,
                       leading: Icon(
                         Icons.school,
                         color: Color(

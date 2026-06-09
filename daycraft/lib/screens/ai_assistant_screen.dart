@@ -277,6 +277,7 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
                           ),
                         ),
                         child: ListTile(
+                          tileColor: Colors.transparent,
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 4,
