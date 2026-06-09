@@ -117,14 +117,19 @@ class DeadlinesScreenState extends State<DeadlinesScreen> {
       return;
     }
 
+    // Format time before popping dialog (context may become invalid after pop)
+    final timeStr = selectedTime!.format(context);
+
     final newDeadline = {
       "title": titleController.text,
       "date": "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}",
-      "time": selectedTime!.format(context),
+      "time": timeStr,
       "type": selectedDeadlineType,
       "course": selectedCourse == "None" ? "" : selectedCourse,
       "estimatedHours": estimatedHoursController.text,
     };
+
+    Navigator.pop(context);
 
     // Add to Firestore and get document ID
     final docId = await StorageService.addDeadline(newDeadline);
@@ -142,8 +147,6 @@ class DeadlinesScreenState extends State<DeadlinesScreen> {
     estimatedHoursController.clear();
     selectedDate = null;
     selectedTime = null;
-
-    Navigator.pop(context);
   }
 
   void showAddDialog() {
