@@ -36,26 +36,54 @@ class _HomeScreenState extends State<HomeScreen> {
         index: _currentIndex,
         children: _screens,
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: Colors.deepPurple,
-        unselectedItemColor: Colors.grey.shade400,
-        backgroundColor: Colors.white,
-        elevation: 8,
-        onTap: (index) {
-          setState(() => _currentIndex = index);
-          // Refresh Calendar tab when switching to it
-          if (index == 1) {
-            _calendarKey.currentState?.loadTodayEvents();
-          }
-        },
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: "Home"),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_today_rounded), label: "Calendar"),
-          BottomNavigationBarItem(icon: Icon(Icons.school_rounded), label: "Courses"),
-          BottomNavigationBarItem(icon: Icon(Icons.assignment_rounded), label: "Deadlines"),
-        ],
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 20, offset: const Offset(0, -4))],
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildNavItem(0, Icons.home_rounded, "Home"),
+                _buildNavItem(1, Icons.calendar_today_rounded, "Calendar"),
+                _buildNavItem(2, Icons.school_rounded, "Courses"),
+                _buildNavItem(3, Icons.assignment_rounded, "Deadlines"),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem(int index, IconData icon, String label) {
+    final isSelected = _currentIndex == index;
+    return GestureDetector(
+      onTap: () {
+        setState(() => _currentIndex = index);
+        if (index == 1) _calendarKey.currentState?.loadTodayEvents();
+      },
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: EdgeInsets.symmetric(horizontal: isSelected ? 16 : 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.deepPurple.withValues(alpha: 0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 22, color: isSelected ? Colors.deepPurple : Colors.grey.shade400),
+            if (isSelected) ...[
+              const SizedBox(width: 6),
+              Text(label, style: const TextStyle(color: Colors.deepPurple, fontSize: 12, fontWeight: FontWeight.w700)),
+            ],
+          ],
+        ),
       ),
     );
   }

@@ -459,139 +459,104 @@ class _CoursesScreenState extends State<CoursesScreen> {
   void showAddDeadlineDialog(Map<String, dynamic> course) {
     showDialog(
       context: context,
-
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: Text("Add Deadline"),
-
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Text("Add Deadline — ${course["name"]}"),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-
                   children: [
-                    Text(
-                      course["name"],
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-
-                    const SizedBox(height: 20),
-
                     TextField(
                       controller: deadlineTitleController,
-
-                      decoration: const InputDecoration(
-                        labelText: "Deadline Title",
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        hintText: "Assignment / Exam...",
+                        filled: true, fillColor: Colors.grey.shade50,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                       ),
                     ),
-
-                    const SizedBox(height: 20),
-
-                    DropdownButton<String>(
-                      value: selectedDeadlineType,
-
-                      isExpanded: true,
-
-                      items: const [
-                        DropdownMenuItem(
-                          value: "Homework",
-
-                          child: Text("Homework"),
-                        ),
-
-                        DropdownMenuItem(value: "Exam", child: Text("Exam")),
-
-                        DropdownMenuItem(value: "Quiz", child: Text("Quiz")),
-                      ],
-
-                      onChanged: (value) {
-                        setDialogState(() {
-                          selectedDeadlineType = value!;
-                        });
-                      },
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    ElevatedButton(
-                      onPressed: () async {
-                        final picked = await showDatePicker(
+                    const SizedBox(height: 14),
+                    // Type picker
+                    GestureDetector(
+                      onTap: () async {
+                        final picked = await showModalBottomSheet<String>(
                           context: context,
-
-                          initialDate: DateTime.now(),
-
-                          firstDate: DateTime.now(),
-
-                          lastDate: DateTime(2030),
+                          builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                            const Padding(padding: EdgeInsets.all(12), child: Text("Deadline Type", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                            ListTile(leading: const Icon(Icons.assignment, color: Colors.orange), title: const Text("Homework"), onTap: () => Navigator.pop(ctx, "Homework")),
+                            ListTile(leading: const Icon(Icons.school, color: Colors.red), title: const Text("Exam"), onTap: () => Navigator.pop(ctx, "Exam")),
+                            ListTile(leading: const Icon(Icons.quiz, color: Colors.blue), title: const Text("Quiz"), onTap: () => Navigator.pop(ctx, "Quiz")),
+                          ])),
                         );
-
-                        if (picked != null) {
-                          setDialogState(() {
-                            selectedDeadlineDate = picked;
-                          });
-                        }
+                        if (picked != null) setDialogState(() => selectedDeadlineType = picked);
                       },
-
-                      child: Text(
-                        selectedDeadlineDate == null
-                            ? "Choose Date"
-                            : selectedDeadlineDate!.toString().split(" ")[0],
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+                        child: Row(children: [
+                          const Icon(Icons.category_rounded, size: 16, color: Colors.deepPurple),
+                          const SizedBox(width: 10),
+                          Text(selectedDeadlineType, style: const TextStyle(fontWeight: FontWeight.w600)),
+                          const Spacer(),
+                          const Icon(Icons.arrow_drop_down, color: Colors.grey),
+                        ]),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    // Date picker
+                    GestureDetector(
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context, initialDate: DateTime.now(),
+                          firstDate: DateTime.now(), lastDate: DateTime(2030),
+                        );
+                        if (picked != null) setDialogState(() => selectedDeadlineDate = picked);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                        decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: selectedDeadlineDate != null ? Colors.deepPurple.shade200 : Colors.grey.shade200)),
+                        child: Row(children: [
+                          Icon(Icons.event_rounded, size: 18, color: selectedDeadlineDate != null ? Colors.deepPurple : Colors.grey),
+                          const SizedBox(width: 10),
+                          Text(
+                            selectedDeadlineDate != null
+                                ? "${selectedDeadlineDate!.day}/${selectedDeadlineDate!.month}/${selectedDeadlineDate!.year}"
+                                : "Set due date...",
+                            style: TextStyle(fontWeight: FontWeight.w600, color: selectedDeadlineDate != null ? Colors.black87 : Colors.grey),
+                          ),
+                        ]),
                       ),
                     ),
                   ],
                 ),
               ),
-
               actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
-
-                  child: const Text("Cancel"),
-                ),
-
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
                 ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                   onPressed: () async {
-                    if (deadlineTitleController.text.trim().isEmpty ||
-                        selectedDeadlineDate == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text("Please choose a date and title"),
-                        ),
-                      );
-
+                    if (deadlineTitleController.text.trim().isEmpty || selectedDeadlineDate == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please choose a date and title")));
                       return;
                     }
-
                     final deadlines = await StorageService.loadDeadlines();
-
                     deadlines.add({
                       "title": deadlineTitleController.text,
-
                       "course": course["name"],
-
                       "type": selectedDeadlineType,
-
                       "date": selectedDeadlineDate!.toString().split(" ")[0],
                     });
-
                     await StorageService.saveDeadlines(deadlines);
-
                     deadlineTitleController.clear();
-
                     selectedDeadlineDate = null;
-
                     selectedDeadlineType = "Homework";
-
                     Navigator.pop(context);
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Deadline added")),
-                    );
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Deadline added ✓")));
                   },
-
                   child: const Text("Add"),
                 ),
               ],

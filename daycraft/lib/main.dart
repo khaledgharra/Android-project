@@ -22,7 +22,27 @@ class DayCraftApp extends StatelessWidget {
       title: 'DayCraft',
       theme: ThemeData(
         primarySwatch: Colors.deepPurple,
-        scaffoldBackgroundColor: Colors.white,
+        scaffoldBackgroundColor: const Color(0xFFFDFBF7),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFFFDFBF7),
+          foregroundColor: Colors.black87,
+          elevation: 0,
+          centerTitle: true,
+          titleTextStyle: TextStyle(color: Colors.black87, fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        floatingActionButtonTheme: const FloatingActionButtonThemeData(
+          backgroundColor: Colors.deepPurple,
+          foregroundColor: Colors.white,
+          elevation: 4,
+          shape: CircleBorder(),
+        ),
+        dialogTheme: DialogThemeData(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        ),
+        snackBarTheme: SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
       ),
       home: const AuthGate(),
     );
