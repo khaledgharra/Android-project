@@ -4,25 +4,34 @@ import 'package:http/http.dart' as http;
 import 'api_keys.dart';
 
 class GeminiService {
-  // API key loaded from local api_keys.dart (gitignored)
-  static String get _apiKey => geminiApiKey;
+  // Using OpenRouter API with free AI models
+  static String get _apiKey => openRouterApiKey;
   static String? _lastError;
-  
+
   /// Get the last error message (if any)
   static String? get lastError => _lastError;
-  static const String _baseUrl =
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+
+  static const String _baseUrl = 'https://openrouter.ai/api/v1/chat/completions';
+
+  // Free models to try in order of preference (fast & reliable)
+  static const List<String> _freeModels = [
+    'poolside/laguna-xs.2:free',
+    'google/gemma-4-26b-a4b-it:free',
+    'nvidia/nemotron-3-super-120b-a12b:free',
+  ];
 
   /// Generate study subtasks from a complex goal/exam description
   /// Returns a list of 3-5 actionable study tasks
   static Future<List<String>> generateStudyPlan(String goal) async {
+    _lastError = null;
+
     if (_apiKey.isEmpty) {
-      debugPrint('Gemini API key not configured in .env file');
+      debugPrint('OpenRouter API key not configured');
+      _lastError = 'API key not configured';
       return _getFallbackTasks(goal);
     }
 
-    final prompt = '''
-You are a study planning assistant. A student needs to prepare for the following academic goal:
+    final prompt = '''You are a study planning assistant. A student needs to prepare for the following academic goal:
 
 "$goal"
 
@@ -32,58 +41,57 @@ Break this down into exactly 3-5 specific, actionable micro-tasks that the stude
 - Ordered logically (foundations first, then advanced)
 
 Respond ONLY with a JSON array of strings. No explanation, no markdown, just the JSON array.
-Example format: ["Task 1", "Task 2", "Task 3"]
-''';
+Example format: ["Task 1", "Task 2", "Task 3"]''';
 
-    try {
-      final requestBody = jsonEncode({
-        'contents': [
-          {
-            'parts': [
-              {'text': prompt}
-            ]
-          }
-        ],
-        'generationConfig': {
-          'temperature': 0.7,
-          'maxOutputTokens': 500,
-        }
-      });
-
-      // Try up to 2 times (in case of rate limit with short retry)
-      for (int attempt = 0; attempt < 2; attempt++) {
+    // Try each free model until one works
+    for (final model in _freeModels) {
+      try {
         final response = await http.post(
-          Uri.parse('$_baseUrl?key=$_apiKey'),
-          headers: {'Content-Type': 'application/json'},
-          body: requestBody,
-        );
+          Uri.parse(_baseUrl),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $_apiKey',
+          },
+          body: jsonEncode({
+            'model': model,
+            'messages': [
+              {'role': 'user', 'content': prompt}
+            ],
+            'temperature': 0.7,
+            'max_tokens': 500,
+          }),
+        ).timeout(const Duration(seconds: 25));
 
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
-          final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? '';
-          return _parseTaskList(text);
-        } else if (response.statusCode == 429 && attempt == 0) {
-          // Rate limited — wait and retry once
-          debugPrint('Gemini API rate limited, retrying in 5 seconds...');
-          await Future.delayed(const Duration(seconds: 5));
+          final text = data['choices']?[0]?['message']?['content'] ?? '';
+          if (text.isNotEmpty) {
+            final tasks = _parseTaskList(text);
+            if (tasks.isNotEmpty) {
+              debugPrint('AI response from model: $model');
+              return tasks;
+            }
+          }
+        } else if (response.statusCode == 429) {
+          debugPrint('Model $model rate limited, trying next...');
           continue;
         } else {
-          debugPrint('Gemini API error: ${response.statusCode} - ${response.body}');
-          _lastError = 'API error ${response.statusCode}: Rate limit or quota exceeded';
-          return _getFallbackTasks(goal);
+          debugPrint('Model $model error: ${response.statusCode}');
+          continue;
         }
+      } catch (e) {
+        debugPrint('Model $model exception: $e');
+        continue;
       }
-      return _getFallbackTasks(goal);
-    } catch (e) {
-      debugPrint('Gemini API exception: $e');
-      _lastError = 'Network error: $e';
-      return _getFallbackTasks(goal);
     }
+
+    // All models failed
+    _lastError = 'All AI models temporarily unavailable. Please try again in a moment.';
+    return _getFallbackTasks(goal);
   }
 
   /// Parse the AI response into a clean list of tasks
   static List<String> _parseTaskList(String text) {
-    // Try to find JSON array in the response
     final cleanedText = text.trim();
 
     // Try direct JSON parse
@@ -110,7 +118,7 @@ Example format: ["Task 1", "Task 2", "Task 3"]
 
     if (lines.isNotEmpty) return lines.take(5).toList();
 
-    return ['Review key concepts', 'Practice problems', 'Summarize notes'];
+    return [];
   }
 
   /// Fallback tasks when API is unavailable
