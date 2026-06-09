@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'today_timeline_screen.dart';
-import 'schedule_screen.dart';
 import '../services/storage_service.dart';
 import '../services/auth_service.dart';
 import 'deadlines_screen.dart';
@@ -25,7 +24,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _screens = [
       const _DashboardTab(),
       TodayTimelineScreen(key: _calendarKey),
-      const ScheduleScreen(),
       const CoursesScreen(),
       const DeadlinesScreen(),
     ];
@@ -55,7 +53,6 @@ class _HomeScreenState extends State<HomeScreen> {
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: "Home"),
           BottomNavigationBarItem(icon: Icon(Icons.calendar_today_rounded), label: "Calendar"),
-          BottomNavigationBarItem(icon: Icon(Icons.edit_calendar_rounded), label: "Week"),
           BottomNavigationBarItem(icon: Icon(Icons.school_rounded), label: "Courses"),
           BottomNavigationBarItem(icon: Icon(Icons.assignment_rounded), label: "Deadlines"),
         ],
