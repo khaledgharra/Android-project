@@ -6,10 +6,10 @@ class DeadlinesScreen extends StatefulWidget {
   const DeadlinesScreen({super.key});
 
   @override
-  State<DeadlinesScreen> createState() => _DeadlinesScreenState();
+  State<DeadlinesScreen> createState() => DeadlinesScreenState();
 }
 
-class _DeadlinesScreenState extends State<DeadlinesScreen> {
+class DeadlinesScreenState extends State<DeadlinesScreen> {
   List<String> availableCourses = ["None"];
   final estimatedHoursController = TextEditingController();
   String sortOption = "Date";
@@ -117,14 +117,19 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
       return;
     }
 
+    // Format time before popping dialog (context may become invalid after pop)
+    final timeStr = selectedTime!.format(context);
+
     final newDeadline = {
       "title": titleController.text,
       "date": "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}",
-      "time": selectedTime!.format(context),
+      "time": timeStr,
       "type": selectedDeadlineType,
       "course": selectedCourse == "None" ? "" : selectedCourse,
       "estimatedHours": estimatedHoursController.text,
     };
+
+    Navigator.pop(context);
 
     // Add to Firestore and get document ID
     final docId = await StorageService.addDeadline(newDeadline);
@@ -142,8 +147,6 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
     estimatedHoursController.clear();
     selectedDate = null;
     selectedTime = null;
-
-    Navigator.pop(context);
   }
 
   void showAddDialog() {
@@ -153,6 +156,7 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               title: const Text("Add Deadline"),
               content: SingleChildScrollView(
                 child: Column(
@@ -160,99 +164,114 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
                   children: [
                     TextField(
                       controller: titleController,
-                      decoration: const InputDecoration(
+                      autofocus: true,
+                      decoration: InputDecoration(
                         hintText: "Assignment / Exam...",
+                        filled: true, fillColor: Colors.grey.shade50,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: DateTime.now(),
-                          firstDate: DateTime.now(),
-                          lastDate: DateTime(2030),
+                    const SizedBox(height: 14),
+                    // Date & Time — single tap chains date → time
+                    GestureDetector(
+                      onTap: () async {
+                        final pickedDate = await showDatePicker(
+                          context: context, initialDate: selectedDate ?? DateTime.now(),
+                          firstDate: DateTime.now(), lastDate: DateTime(2030),
                         );
-                        if (picked != null) {
-                          setDialogState(() {
-                            selectedDate = picked;
-                          });
-                        }
-                      },
-                      child: Text(
-                        selectedDate == null
-                            ? "Pick Date"
-                            : "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}",
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    ElevatedButton(
-                      onPressed: () async {
-                        final picked = await showTimePicker(
-                          context: context,
-                          initialTime: TimeOfDay.now(),
+                        if (pickedDate == null) return;
+                        setDialogState(() => selectedDate = pickedDate);
+                        final pickedTime = await showTimePicker(
+                          context: context, initialTime: selectedTime ?? const TimeOfDay(hour: 23, minute: 59),
+                          initialEntryMode: TimePickerEntryMode.inputOnly, helpText: "DUE TIME",
                         );
-                        if (picked != null) {
-                          setDialogState(() {
-                            selectedTime = picked;
-                          });
-                        }
+                        if (pickedTime != null) setDialogState(() => selectedTime = pickedTime);
                       },
-                      child: Text(
-                        selectedTime == null
-                            ? "Pick Time"
-                            : selectedTime!.format(context),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                        decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: selectedDate != null ? Colors.deepPurple.shade200 : Colors.grey.shade200)),
+                        child: Row(children: [
+                          Icon(Icons.event_rounded, size: 18, color: selectedDate != null ? Colors.deepPurple : Colors.grey),
+                          const SizedBox(width: 10),
+                          Text(
+                            selectedDate != null
+                                ? "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}${selectedTime != null ? '  ${selectedTime!.format(context)}' : ''}"
+                                : "Set due date & time...",
+                            style: TextStyle(fontWeight: FontWeight.w600, color: selectedDate != null ? Colors.black87 : Colors.grey),
+                          ),
+                        ]),
                       ),
                     ),
+                    const SizedBox(height: 14),
                     TextField(
                       controller: estimatedHoursController,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: "Estimated Study Hours",
+                        filled: true, fillColor: Colors.grey.shade50,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    DropdownButton<String>(
-                      value: selectedCourse,
-                      isExpanded: true,
-                      items: availableCourses.map((course) {
-                        return DropdownMenuItem(
-                          value: course,
-                          child: Text(course),
+                    const SizedBox(height: 14),
+                    // Course picker
+                    GestureDetector(
+                      onTap: () async {
+                        final picked = await showModalBottomSheet<String>(
+                          context: context,
+                          builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                            const Padding(padding: EdgeInsets.all(12), child: Text("Select Course", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                            ...availableCourses.map((c) => ListTile(title: Text(c), onTap: () => Navigator.pop(ctx, c))),
+                          ])),
                         );
-                      }).toList(),
-                      onChanged: (value) {
-                        setDialogState(() {
-                          selectedCourse = value!;
-                        });
+                        if (picked != null) setDialogState(() => selectedCourse = picked);
                       },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+                        child: Row(children: [
+                          const Icon(Icons.school_rounded, size: 16, color: Colors.deepPurple),
+                          const SizedBox(width: 10),
+                          Text(selectedCourse, style: const TextStyle(fontWeight: FontWeight.w600)),
+                          const Spacer(),
+                          const Icon(Icons.arrow_drop_down, color: Colors.grey),
+                        ]),
+                      ),
                     ),
-                    const SizedBox(height: 20),
-                    DropdownButton<String>(
-                      value: selectedDeadlineType,
-                      isExpanded: true,
-                      items: const [
-                        DropdownMenuItem(value: "Homework", child: Text("Homework")),
-                        DropdownMenuItem(value: "Exam", child: Text("Exam")),
-                        DropdownMenuItem(value: "Quiz", child: Text("Quiz")),
-                      ],
-                      onChanged: (value) {
-                        setDialogState(() {
-                          selectedDeadlineType = value!;
-                        });
+                    const SizedBox(height: 14),
+                    // Type picker
+                    GestureDetector(
+                      onTap: () async {
+                        final picked = await showModalBottomSheet<String>(
+                          context: context,
+                          builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                            const Padding(padding: EdgeInsets.all(12), child: Text("Deadline Type", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                            ListTile(leading: const Icon(Icons.assignment, color: Colors.orange), title: const Text("Homework"), onTap: () => Navigator.pop(ctx, "Homework")),
+                            ListTile(leading: const Icon(Icons.school, color: Colors.red), title: const Text("Exam"), onTap: () => Navigator.pop(ctx, "Exam")),
+                            ListTile(leading: const Icon(Icons.quiz, color: Colors.blue), title: const Text("Quiz"), onTap: () => Navigator.pop(ctx, "Quiz")),
+                          ])),
+                        );
+                        if (picked != null) setDialogState(() => selectedDeadlineType = picked);
                       },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+                        child: Row(children: [
+                          Icon(getDeadlineIcon(selectedDeadlineType), size: 16, color: getDeadlineTypeColor(selectedDeadlineType)),
+                          const SizedBox(width: 10),
+                          Text(selectedDeadlineType, style: const TextStyle(fontWeight: FontWeight.w600)),
+                          const Spacer(),
+                          const Icon(Icons.arrow_drop_down, color: Colors.grey),
+                        ]),
+                      ),
                     ),
                   ],
                 ),
               ),
               actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
-                  child: const Text("Cancel"),
-                ),
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
                 ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                   onPressed: addDeadline,
                   child: const Text("Add"),
                 ),
@@ -314,6 +333,7 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: "deadlines_fab",
         onPressed: () {
           clearDeadlineState();
           showAddDialog();
@@ -488,6 +508,7 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               title: const Text("Edit Deadline"),
               content: SingleChildScrollView(
                 child: Column(
@@ -495,98 +516,111 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
                   children: [
                     TextField(
                       controller: titleController,
-                      decoration: const InputDecoration(hintText: "Deadline Title"),
-                    ),
-                    const SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: selectedDate ?? DateTime.now(),
-                          firstDate: DateTime.now(),
-                          lastDate: DateTime(2030),
-                        );
-                        if (picked != null) {
-                          setDialogState(() {
-                            selectedDate = picked;
-                          });
-                        }
-                      },
-                      child: Text(
-                        selectedDate == null
-                            ? "Pick Date"
-                            : "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}",
+                      decoration: InputDecoration(
+                        hintText: "Deadline Title",
+                        filled: true, fillColor: Colors.grey.shade50,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    ElevatedButton(
-                      onPressed: () async {
-                        final picked = await showTimePicker(
-                          context: context,
-                          initialTime: selectedTime ?? TimeOfDay.now(),
+                    const SizedBox(height: 14),
+                    // Date & Time chained
+                    GestureDetector(
+                      onTap: () async {
+                        final pickedDate = await showDatePicker(
+                          context: context, initialDate: selectedDate ?? DateTime.now(),
+                          firstDate: DateTime.now(), lastDate: DateTime(2030),
                         );
-                        if (picked != null) {
-                          setDialogState(() {
-                            selectedTime = picked;
-                          });
-                        }
+                        if (pickedDate == null) return;
+                        setDialogState(() => selectedDate = pickedDate);
+                        final pickedTime = await showTimePicker(
+                          context: context, initialTime: selectedTime ?? const TimeOfDay(hour: 23, minute: 59),
+                          initialEntryMode: TimePickerEntryMode.inputOnly, helpText: "DUE TIME",
+                        );
+                        if (pickedTime != null) setDialogState(() => selectedTime = pickedTime);
                       },
-                      child: Text(
-                        selectedTime == null
-                            ? "Pick Time"
-                            : selectedTime!.format(context),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                        decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: selectedDate != null ? Colors.deepPurple.shade200 : Colors.grey.shade200)),
+                        child: Row(children: [
+                          Icon(Icons.event_rounded, size: 18, color: selectedDate != null ? Colors.deepPurple : Colors.grey),
+                          const SizedBox(width: 10),
+                          Text(
+                            selectedDate != null
+                                ? "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}${selectedTime != null ? '  ${selectedTime!.format(context)}' : ''}"
+                                : "Set due date & time...",
+                            style: TextStyle(fontWeight: FontWeight.w600, color: selectedDate != null ? Colors.black87 : Colors.grey),
+                          ),
+                        ]),
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 14),
                     TextField(
                       controller: estimatedHoursController,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: "Estimated Study Hours",
+                        filled: true, fillColor: Colors.grey.shade50,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                       ),
                     ),
-                    DropdownButton<String>(
-                      value: selectedCourse,
-                      isExpanded: true,
-                      items: availableCourses.map((course) {
-                        return DropdownMenuItem(
-                          value: course,
-                          child: Text(course),
+                    const SizedBox(height: 14),
+                    GestureDetector(
+                      onTap: () async {
+                        final picked = await showModalBottomSheet<String>(
+                          context: context,
+                          builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                            const Padding(padding: EdgeInsets.all(12), child: Text("Select Course", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                            ...availableCourses.map((c) => ListTile(title: Text(c), onTap: () => Navigator.pop(ctx, c))),
+                          ])),
                         );
-                      }).toList(),
-                      onChanged: (value) {
-                        setDialogState(() {
-                          selectedCourse = value!;
-                        });
+                        if (picked != null) setDialogState(() => selectedCourse = picked);
                       },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+                        child: Row(children: [
+                          const Icon(Icons.school_rounded, size: 16, color: Colors.deepPurple),
+                          const SizedBox(width: 10),
+                          Text(selectedCourse, style: const TextStyle(fontWeight: FontWeight.w600)),
+                          const Spacer(),
+                          const Icon(Icons.arrow_drop_down, color: Colors.grey),
+                        ]),
+                      ),
                     ),
-                    const SizedBox(height: 20),
-                    DropdownButton<String>(
-                      value: selectedDeadlineType,
-                      isExpanded: true,
-                      items: const [
-                        DropdownMenuItem(value: "Homework", child: Text("Homework")),
-                        DropdownMenuItem(value: "Exam", child: Text("Exam")),
-                        DropdownMenuItem(value: "Quiz", child: Text("Quiz")),
-                      ],
-                      onChanged: (value) {
-                        setDialogState(() {
-                          selectedDeadlineType = value!;
-                        });
+                    const SizedBox(height: 14),
+                    GestureDetector(
+                      onTap: () async {
+                        final picked = await showModalBottomSheet<String>(
+                          context: context,
+                          builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                            const Padding(padding: EdgeInsets.all(12), child: Text("Deadline Type", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                            ListTile(leading: const Icon(Icons.assignment, color: Colors.orange), title: const Text("Homework"), onTap: () => Navigator.pop(ctx, "Homework")),
+                            ListTile(leading: const Icon(Icons.school, color: Colors.red), title: const Text("Exam"), onTap: () => Navigator.pop(ctx, "Exam")),
+                            ListTile(leading: const Icon(Icons.quiz, color: Colors.blue), title: const Text("Quiz"), onTap: () => Navigator.pop(ctx, "Quiz")),
+                          ])),
+                        );
+                        if (picked != null) setDialogState(() => selectedDeadlineType = picked);
                       },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+                        child: Row(children: [
+                          Icon(getDeadlineIcon(selectedDeadlineType), size: 16, color: getDeadlineTypeColor(selectedDeadlineType)),
+                          const SizedBox(width: 10),
+                          Text(selectedDeadlineType, style: const TextStyle(fontWeight: FontWeight.w600)),
+                          const Spacer(),
+                          const Icon(Icons.arrow_drop_down, color: Colors.grey),
+                        ]),
+                      ),
                     ),
                   ],
                 ),
               ),
               actions: [
-                TextButton(
-                  onPressed: () {
-                    clearDeadlineState();
-                    Navigator.pop(context);
-                  },
-                  child: const Text("Cancel"),
-                ),
+                TextButton(onPressed: () { clearDeadlineState(); Navigator.pop(context); }, child: const Text("Cancel")),
                 ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                   onPressed: () async {
                     final updatedData = {
                       "title": titleController.text,
@@ -597,7 +631,6 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
                       "estimatedHours": estimatedHoursController.text,
                     };
 
-                    // Update in Firestore using document ID
                     final docId = item['id'];
                     if (docId != null) {
                       await StorageService.updateDeadline(docId, updatedData);
@@ -605,11 +638,7 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
                     }
 
                     if (!mounted) return;
-                    setState(() {
-                      deadlines[index] = updatedData;
-                      sortDeadlines();
-                    });
-
+                    setState(() { deadlines[index] = updatedData; sortDeadlines(); });
                     clearDeadlineState();
                     Navigator.pop(context);
                   },
