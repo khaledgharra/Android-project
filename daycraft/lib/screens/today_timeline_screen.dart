@@ -15,23 +15,9 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
   bool isLoading = true;
   Timer? _timeUpdateTimer;
 
-  /// Day or Week view
-  String viewMode = "Day"; // "Day" or "Week"
-
-  /// The currently viewed date (for day view)
+  String viewMode = "Day";
   DateTime selectedDate = DateTime.now();
 
-  // Study session state
-  Map<String, dynamic>? activeStudyWindow;
-  String? studyObjective;
-  bool isTimerRunning = false;
-  bool isTimerPaused = false;
-  int remainingSeconds = 0;
-  int totalSessionSeconds = 0;
-  Timer? _countdownTimer;
-  Set<String> completedWindows = {};
-
-  // Timeline constants
   static const double hourHeight = 80.0;
   static const int startHour = 0;
   static const int endHour = 24;
@@ -56,7 +42,6 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
   @override
   void dispose() {
     _timeUpdateTimer?.cancel();
-    _countdownTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -95,9 +80,7 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
   Future<void> loadTodayEvents() async {
     final loaded = await StorageService.loadSchedule();
     if (!mounted) return;
-    setState(() {
-      allSchedule = loaded;
-    });
+    setState(() { allSchedule = loaded; });
     _filterEventsForSelectedDay();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_isToday) _scrollToCurrentTime();
@@ -143,119 +126,6 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
         duration: const Duration(milliseconds: 500), curve: Curves.easeOut,
       );
     }
-  }
-
-  List<Map<String, dynamic>> _computeStudyWindows() {
-    List<Map<String, dynamic>> windows = [];
-    List<(int, int)> occupiedSlots = [];
-    for (var event in dayEvents) {
-      final (startH, startM) = _parseTime(event["start"]!);
-      final (endH, endM) = _parseTime(event["end"]!);
-      occupiedSlots.add((startH * 60 + startM, endH * 60 + endM));
-    }
-    occupiedSlots.sort((a, b) => a.$1.compareTo(b.$1));
-    int searchStart = startHour * 60;
-    int searchEnd = endHour * 60;
-    List<(int, int)> merged = [];
-    for (var slot in occupiedSlots) {
-      if (merged.isEmpty || slot.$1 > merged.last.$2) { merged.add(slot); }
-      else { final last = merged.removeLast(); merged.add((last.$1, slot.$2 > last.$2 ? slot.$2 : last.$2)); }
-    }
-    int prevEnd = searchStart;
-    for (var slot in merged) {
-      if (slot.$1 > prevEnd && slot.$1 - prevEnd >= 30) {
-        windows.add({"startMinutes": prevEnd, "endMinutes": slot.$1, "duration": slot.$1 - prevEnd});
-      }
-      prevEnd = slot.$2;
-    }
-    if (prevEnd < searchEnd && searchEnd - prevEnd >= 30) {
-      windows.add({"startMinutes": prevEnd, "endMinutes": searchEnd, "duration": searchEnd - prevEnd});
-    }
-    return windows;
-  }
-
-  String _formatDuration(int minutes) {
-    if (minutes >= 60) {
-      final hours = minutes ~/ 60;
-      final mins = minutes % 60;
-      if (mins == 0) return "$hours ${hours == 1 ? 'Hr' : 'Hrs'}";
-      return "${hours}h ${mins}m";
-    }
-    return "${minutes}m";
-  }
-
-  String _formatMinutesToTime(int minutes) {
-    final h = minutes ~/ 60;
-    final m = minutes % 60;
-    final period = h >= 12 ? "PM" : "AM";
-    final displayH = h > 12 ? h - 12 : (h == 0 ? 12 : h);
-    return "$displayH:${m.toString().padLeft(2, '0')} $period";
-  }
-
-  void _showStudyObjectiveDialog(Map<String, dynamic> window) {
-    final controller = TextEditingController();
-    final windowKey = "${window["startMinutes"]}-${window["endMinutes"]}";
-    if (completedWindows.contains(windowKey)) return;
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("📚 Set Study Objective"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("${_formatMinutesToTime(window["startMinutes"])} — ${_formatMinutesToTime(window["endMinutes"])}",
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
-            Text(_formatDuration(window["duration"]), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
-            const SizedBox(height: 16),
-            TextField(controller: controller, autofocus: true, decoration: InputDecoration(
-              hintText: "e.g., Read Chapter 4...", filled: true, fillColor: Colors.grey.shade50,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-            )),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-            onPressed: () {
-              if (controller.text.trim().isEmpty) return;
-              Navigator.pop(ctx);
-              setState(() {
-                activeStudyWindow = window; studyObjective = controller.text.trim();
-                remainingSeconds = window["duration"] * 60; totalSessionSeconds = window["duration"] * 60;
-                isTimerRunning = false; isTimerPaused = false;
-              });
-            },
-            child: const Text("Set Goal"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _startTimer() {
-    setState(() { isTimerRunning = true; isTimerPaused = false; });
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) { timer.cancel(); return; }
-      if (remainingSeconds <= 0) { timer.cancel(); _completeSession(); return; }
-      setState(() { remainingSeconds--; });
-    });
-  }
-  void _pauseTimer() { _countdownTimer?.cancel(); setState(() { isTimerPaused = true; isTimerRunning = false; }); }
-  void _resumeTimer() { _startTimer(); }
-  void _completeSession() {
-    _countdownTimer?.cancel();
-    final windowKey = "${activeStudyWindow!["startMinutes"]}-${activeStudyWindow!["endMinutes"]}";
-    setState(() { completedWindows.add(windowKey); activeStudyWindow = null; studyObjective = null; isTimerRunning = false; isTimerPaused = false; remainingSeconds = 0; });
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("🎉 Study session completed!"), backgroundColor: Colors.green));
-  }
-
-  String _formatCountdown(int seconds) {
-    final m = seconds ~/ 60; final s = seconds % 60;
-    return "${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}";
   }
 
   // =================== ADD EVENT DIALOG ===================
@@ -308,14 +178,12 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              // Time picker — single tap opens start then auto-chains to end
+              // Time picker — single tap chains start → end
               GestureDetector(
                 onTap: () async {
-                  // Pick start time
                   final pickedStart = await showTimePicker(context: context, initialTime: startTime ?? const TimeOfDay(hour: 8, minute: 0), initialEntryMode: TimePickerEntryMode.input, helpText: "START TIME");
                   if (pickedStart == null) return;
                   setDialogState(() => startTime = pickedStart);
-                  // Auto-chain to end time
                   final pickedEnd = await showTimePicker(context: context, initialTime: endTime ?? pickedStart, initialEntryMode: TimePickerEntryMode.input, helpText: "END TIME");
                   if (pickedEnd != null) setDialogState(() => endTime = pickedEnd);
                 },
@@ -382,22 +250,17 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // === HEADER: View mode dropdown + date navigation ===
+            // Header
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               child: Row(
                 children: [
-                  // View mode dropdown
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.deepPurple.shade50,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
+                    decoration: BoxDecoration(color: Colors.deepPurple.shade50, borderRadius: BorderRadius.circular(20)),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
-                        value: viewMode,
-                        isDense: true,
+                        value: viewMode, isDense: true,
                         style: const TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.w600, fontSize: 14),
                         icon: const Icon(Icons.arrow_drop_down, color: Colors.deepPurple),
                         items: const [
@@ -409,24 +272,20 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-
-                  // Day navigation (only in Day view)
                   if (viewMode == "Day") ...[
                     IconButton(onPressed: _goToPreviousDay, icon: const Icon(Icons.chevron_left_rounded), iconSize: 24, color: Colors.grey.shade700),
                     Expanded(
                       child: GestureDetector(
                         onTap: _isToday ? null : _goToToday,
-                        child: Column(
-                          children: [
-                            Text(dayName, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _isToday ? Colors.deepPurple : Colors.grey.shade700)),
-                            Container(
-                              width: 36, height: 36,
-                              decoration: BoxDecoration(shape: BoxShape.circle, color: _isToday ? Colors.deepPurple : Colors.transparent),
-                              child: Center(child: Text("${selectedDate.day}", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _isToday ? Colors.white : Colors.grey.shade800))),
-                            ),
-                            Text("${months[selectedDate.month - 1]} ${selectedDate.year}", style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-                          ],
-                        ),
+                        child: Column(children: [
+                          Text(dayName, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _isToday ? Colors.deepPurple : Colors.grey.shade700)),
+                          Container(
+                            width: 36, height: 36,
+                            decoration: BoxDecoration(shape: BoxShape.circle, color: _isToday ? Colors.deepPurple : Colors.transparent),
+                            child: Center(child: Text("${selectedDate.day}", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _isToday ? Colors.white : Colors.grey.shade800))),
+                          ),
+                          Text("${months[selectedDate.month - 1]} ${selectedDate.year}", style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                        ]),
                       ),
                     ),
                     IconButton(onPressed: _goToNextDay, icon: const Icon(Icons.chevron_right_rounded), iconSize: 24, color: Colors.grey.shade700),
@@ -436,17 +295,10 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
                 ],
               ),
             ),
-
             if (viewMode == "Day" && !_isToday)
               TextButton.icon(onPressed: _goToToday, icon: const Icon(Icons.today, size: 14), label: const Text("Today", style: TextStyle(fontSize: 12)),
                 style: TextButton.styleFrom(foregroundColor: Colors.deepPurple, padding: EdgeInsets.zero, minimumSize: const Size(0, 30))),
-
             const SizedBox(height: 4),
-
-            // Study session banner
-            if (activeStudyWindow != null && _isToday && viewMode == "Day") _buildStudyBanner(),
-
-            // Body: Day view or Week view
             Expanded(
               child: isLoading
                   ? const Center(child: CircularProgressIndicator())
@@ -465,46 +317,9 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
       Icon(Icons.event_busy_rounded, size: 56, color: Colors.grey.shade300),
       const SizedBox(height: 12),
       Text("No events for this day", style: TextStyle(fontSize: 16, color: Colors.grey.shade500)),
+      const SizedBox(height: 8),
+      Text("Tap + to add an event", style: TextStyle(fontSize: 13, color: Colors.grey.shade400)),
     ]));
-  }
-
-  Widget _buildStudyBanner() {
-    final progress = totalSessionSeconds > 0 ? 1.0 - (remainingSeconds / totalSessionSeconds) : 0.0;
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [Colors.green.shade400, Colors.teal.shade400]),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          const Icon(Icons.auto_stories, color: Colors.white, size: 16),
-          const SizedBox(width: 6),
-          Expanded(child: Text(studyObjective ?? "", style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis)),
-        ]),
-        const SizedBox(height: 8),
-        Center(child: Text(_formatCountdown(remainingSeconds), style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w300, fontFamily: "monospace"))),
-        const SizedBox(height: 8),
-        ClipRRect(borderRadius: BorderRadius.circular(6), child: LinearProgressIndicator(value: progress, minHeight: 4, backgroundColor: Colors.white24, valueColor: const AlwaysStoppedAnimation(Colors.white))),
-        const SizedBox(height: 10),
-        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          if (!isTimerRunning && !isTimerPaused) _btn(Icons.play_arrow_rounded, "Start", _startTimer),
-          if (isTimerRunning) _btn(Icons.pause_rounded, "Pause", _pauseTimer),
-          if (isTimerPaused) _btn(Icons.play_arrow_rounded, "Resume", _resumeTimer),
-          const SizedBox(width: 8),
-          _btn(Icons.check_circle_rounded, "Done", _completeSession),
-        ]),
-      ]),
-    );
-  }
-
-  Widget _btn(IconData icon, String label, VoidCallback onTap) {
-    return GestureDetector(onTap: onTap, child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(20)),
-      child: Row(children: [Icon(icon, color: Colors.white, size: 16), const SizedBox(width: 4), Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12))]),
-    ));
   }
 
   // =================== DAY VIEW ===================
@@ -512,7 +327,6 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
     final now = DateTime.now();
     final currentMinutes = (now.hour - startHour) * 60 + now.minute;
     final currentTimeTop = currentMinutes * (hourHeight / 60);
-    final studyWindows = _isToday ? _computeStudyWindows() : <Map<String, dynamic>>[];
 
     return SingleChildScrollView(
       controller: _scrollController,
@@ -520,33 +334,23 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
       child: SizedBox(height: totalHeight + 16, child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         // Time labels
         SizedBox(width: timeColumnWidth, height: totalHeight + 16, child: Stack(children: List.generate(totalHours, (i) {
-          // Skip 00:00 (first) and 24:00 (last) — like Google Calendar
           final hour = startHour + i + 1;
           if (hour >= endHour) return const SizedBox.shrink();
           return Positioned(top: (i + 1) * hourHeight - 7, left: 0, right: 0,
             child: Text("${hour.toString().padLeft(2, '0')}:00", style: TextStyle(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.w500), textAlign: TextAlign.center));
         }))),
-        // Events
+        // Events area
         Expanded(child: SizedBox(height: totalHeight, child: Stack(children: [
+          // Grid lines
           ...List.generate(totalHours + 1, (i) => Positioned(top: i * hourHeight, left: 0, right: 0, child: Container(height: 0.5, color: Colors.grey.shade200))),
-          // Study windows
-          if (_isToday) ...studyWindows.map((w) {
-            final sMin = w["startMinutes"] as int; final eMin = w["endMinutes"] as int; final dur = w["duration"] as int;
-            final key = "$sMin-$eMin"; final done = completedWindows.contains(key);
-            final active = activeStudyWindow != null && activeStudyWindow!["startMinutes"] == sMin;
-            final top = (sMin - startHour * 60) * (hourHeight / 60); final h = dur * (hourHeight / 60);
-            return Positioned(top: top, left: 4, right: 4, child: GestureDetector(
-              onTap: done || active ? null : () => _showStudyObjectiveDialog(w),
-              child: Container(height: h < 36 ? 36 : h, decoration: BoxDecoration(
-                color: done ? Colors.green.withValues(alpha: 0.12) : Colors.blue.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(10),
-                border: done ? Border.all(color: Colors.green.withValues(alpha: 0.4)) : null),
-                child: Center(child: Text(done ? "✓" : "+  ${_formatDuration(dur)}", style: TextStyle(color: done ? Colors.green.shade600 : Colors.blue.shade400, fontSize: 11, fontWeight: FontWeight.w600))))));
-          }),
-          // Events
+          // Event blocks
           ...dayEvents.map((event) {
-            final (sH, sM) = _parseTime(event["start"]!); final (eH, eM) = _parseTime(event["end"]!);
-            final sMins = (sH - startHour) * 60 + sM; final dur = (eH * 60 + eM) - (sH * 60 + sM);
-            final top = sMins * (hourHeight / 60); final h = dur * (hourHeight / 60);
+            final (sH, sM) = _parseTime(event["start"]!);
+            final (eH, eM) = _parseTime(event["end"]!);
+            final sMins = (sH - startHour) * 60 + sM;
+            final dur = (eH * 60 + eM) - (sH * 60 + sM);
+            final top = sMins * (hourHeight / 60);
+            final h = dur * (hourHeight / 60);
             final color = Color(event["color"] ?? Colors.deepPurple.toARGB32());
             return Positioned(top: top, left: 4, right: 4, child: Container(
               height: h < 32 ? 32 : h, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -557,7 +361,7 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
                 if (h > 45) Text("${event["start"]} — ${event["end"]}", style: const TextStyle(color: Colors.white70, fontSize: 10)),
               ])));
           }),
-          // Red line
+          // Red current time line (only today)
           if (_isToday && currentMinutes >= 0 && currentMinutes <= totalHours * 60)
             Positioned(top: currentTimeTop, left: 0, right: 0, child: Row(children: [
               Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle)),
@@ -568,22 +372,20 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
     );
   }
 
-  // =================== WEEK VIEW (Table) ===================
+  // =================== WEEK VIEW ===================
   Widget _buildWeekView() {
     const double weekHourHeight = 50.0;
     const double headerHeight = 36.0;
     final now = DateTime.now();
-    final todayWeekday = now.weekday; // 1=Mon...7=Sun
+    final todayWeekday = now.weekday;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.only(bottom: 20),
       child: Column(children: [
-        // Day headers row
         Row(children: [
           SizedBox(width: timeColumnWidth, height: headerHeight),
           ...List.generate(7, (i) {
-            // Map to weekday: Sun=0 → 7, Mon=1 → 1, etc.
-            final dartWeekday = i == 0 ? 7 : i; // Sun=7 for Dart
+            final dartWeekday = i == 0 ? 7 : i;
             final isToday = dartWeekday == todayWeekday;
             return Expanded(child: Container(
               height: headerHeight,
@@ -591,25 +393,18 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
                 color: isToday ? Colors.deepPurple.withValues(alpha: 0.1) : Colors.transparent,
                 border: Border(bottom: BorderSide(color: Colors.grey.shade300, width: 0.5)),
               ),
-              child: Center(child: Text(weekDays[i], style: TextStyle(
-                fontSize: 12, fontWeight: FontWeight.bold,
-                color: isToday ? Colors.deepPurple : Colors.grey.shade600,
-              ))),
+              child: Center(child: Text(weekDays[i], style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isToday ? Colors.deepPurple : Colors.grey.shade600))),
             ));
           }),
         ]),
-        // Timeline grid
         SizedBox(
           height: totalHours * weekHourHeight,
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            // Time labels
             SizedBox(width: timeColumnWidth, height: totalHours * weekHourHeight,
               child: Stack(children: List.generate(totalHours + 1, (i) {
                 return Positioned(top: i * weekHourHeight - 7, left: 0, right: 0,
-                  child: Text("${(startHour + i).toString().padLeft(2, '0')}:00",
-                    style: TextStyle(color: Colors.grey.shade500, fontSize: 9, fontWeight: FontWeight.w600), textAlign: TextAlign.center));
+                  child: Text("${(startHour + i).toString().padLeft(2, '0')}:00", style: TextStyle(color: Colors.grey.shade500, fontSize: 9, fontWeight: FontWeight.w600), textAlign: TextAlign.center));
               }))),
-            // 7 day columns
             ...List.generate(7, (dayIndex) {
               final dayFullName = fullDayNames[dayIndex];
               final dartWeekday = dayIndex == 0 ? 7 : dayIndex;
@@ -623,11 +418,7 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
                   border: Border(left: BorderSide(color: Colors.grey.shade200, width: 0.5)),
                 ),
                 child: Stack(children: [
-                  // Grid lines
-                  ...List.generate(totalHours + 1, (i) => Positioned(
-                    top: i * weekHourHeight, left: 0, right: 0,
-                    child: Container(height: 0.5, color: Colors.grey.shade200))),
-                  // Events
+                  ...List.generate(totalHours + 1, (i) => Positioned(top: i * weekHourHeight, left: 0, right: 0, child: Container(height: 0.5, color: Colors.grey.shade200))),
                   ...daySchedule.map((event) {
                     final (sH, sM) = _parseTime(event["start"]!);
                     final (eH, eM) = _parseTime(event["end"]!);
@@ -637,19 +428,14 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
                     final h = dur * (weekHourHeight / 60);
                     final color = Color(event["color"] ?? Colors.deepPurple.toARGB32());
                     return Positioned(top: top, left: 1, right: 1, child: Container(
-                      height: h < 18 ? 18 : h,
-                      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+                      height: h < 18 ? 18 : h, padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
                       decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(6)),
-                      child: Text(event["title"] ?? event["name"] ?? "",
-                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600),
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                      child: Text(event["title"] ?? event["name"] ?? "", style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
                     ));
                   }),
-                  // Red line for today
                   if (isToday) Positioned(
                     top: ((now.hour - startHour) * 60 + now.minute) * (weekHourHeight / 60),
-                    left: 0, right: 0,
-                    child: Container(height: 1.5, color: Colors.red),
+                    left: 0, right: 0, child: Container(height: 1.5, color: Colors.red),
                   ),
                 ]),
               ));
