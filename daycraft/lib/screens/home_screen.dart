@@ -15,7 +15,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
-  final GlobalKey<TodayTimelineScreenState> _todayKey = GlobalKey<TodayTimelineScreenState>();
+  final GlobalKey<TodayTimelineScreenState> _calendarKey = GlobalKey<TodayTimelineScreenState>();
 
   late final List<Widget> _screens;
 
@@ -24,7 +24,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _screens = [
       const _DashboardTab(),
-      TodayTimelineScreen(key: _todayKey),
+      TodayTimelineScreen(key: _calendarKey),
       const ScheduleScreen(),
       const CoursesScreen(),
       const DeadlinesScreen(),
@@ -47,15 +47,15 @@ class _HomeScreenState extends State<HomeScreen> {
         elevation: 8,
         onTap: (index) {
           setState(() => _currentIndex = index);
-          // Refresh Today tab when switching to it
+          // Refresh Calendar tab when switching to it
           if (index == 1) {
-            _todayKey.currentState?.loadTodayEvents();
+            _calendarKey.currentState?.loadTodayEvents();
           }
         },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: "Home"),
-          BottomNavigationBarItem(icon: Icon(Icons.today_rounded), label: "Today"),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_month_rounded), label: "Week"),
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_today_rounded), label: "Calendar"),
+          BottomNavigationBarItem(icon: Icon(Icons.edit_calendar_rounded), label: "Week"),
           BottomNavigationBarItem(icon: Icon(Icons.school_rounded), label: "Courses"),
           BottomNavigationBarItem(icon: Icon(Icons.assignment_rounded), label: "Deadlines"),
         ],
