@@ -726,7 +726,6 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
     const double weekHourHeight = 50.0;
     const double headerHeight = 50.0;
     final now = DateTime.now();
-    final todayWeekday = now.weekday;
 
     // Calculate dates for each day of the week
     final weekStart = _weekStart;
@@ -749,19 +748,24 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
           SizedBox(width: timeColumnWidth, height: headerHeight),
           ...List.generate(7, (i) {
             final date = weekDates[i];
-            final dartWeekday = i == 0 ? 7 : i;
-            final isToday = dartWeekday == todayWeekday && _weekStart.isAtSameMomentAs(DateTime.now().subtract(Duration(days: DateTime.now().weekday % 7)));
+            final isToday = date.year == now.year && date.month == now.month && date.day == now.day;
             final dayDeadlinesForThis = _deadlinesForDate(date);
             final hasDeadline = dayDeadlinesForThis.isNotEmpty;
             return Expanded(child: Container(
               height: headerHeight,
               decoration: BoxDecoration(
-                color: isToday ? Colors.deepPurple.withValues(alpha: 0.1) : Colors.transparent,
                 border: Border(bottom: BorderSide(color: Colors.grey.shade300, width: 0.5)),
               ),
               child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                 Text(weekDays[i], style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isToday ? Colors.deepPurple : Colors.grey.shade600)),
-                Text("${date.day}", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isToday ? Colors.deepPurple : Colors.grey.shade500)),
+                Container(
+                  width: 24, height: 24,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isToday ? Colors.deepPurple : Colors.transparent,
+                  ),
+                  child: Center(child: Text("${date.day}", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isToday ? Colors.white : Colors.grey.shade500))),
+                ),
                 if (hasDeadline)
                   Container(margin: const EdgeInsets.only(top: 2), width: 6, height: 6, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle)),
               ]),
@@ -806,14 +810,13 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
               }))),
             ...List.generate(7, (dayIndex) {
               final dayFullName = fullDayNames[dayIndex];
-              final dartWeekday = dayIndex == 0 ? 7 : dayIndex;
-              final isToday = dartWeekday == todayWeekday;
+              final date = weekDates[dayIndex];
+              final isToday = date.year == now.year && date.month == now.month && date.day == now.day;
               final daySchedule = allSchedule.where((item) => item["day"] == dayFullName && item["start"] != null && item["end"] != null).toList();
 
               return Expanded(child: Container(
                 height: totalHours * weekHourHeight,
                 decoration: BoxDecoration(
-                  color: isToday ? Colors.deepPurple.withValues(alpha: 0.03) : Colors.transparent,
                   border: Border(left: BorderSide(color: Colors.grey.shade200, width: 0.5)),
                 ),
                 child: Stack(children: [
