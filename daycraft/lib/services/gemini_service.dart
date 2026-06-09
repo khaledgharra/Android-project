@@ -5,7 +5,13 @@ import 'package:http/http.dart' as http;
 
 class GeminiService {
   // API key loaded from .env file
-  static String get _apiKey => dotenv.env['GEMINI_API_KEY'] ?? '';
+  static String get _apiKey {
+    try {
+      return dotenv.env['GEMINI_API_KEY'] ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
   static const String _baseUrl =
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 

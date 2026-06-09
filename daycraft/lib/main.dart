@@ -8,7 +8,11 @@ import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: ".env");
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    debugPrint('Warning: .env file not found, Gemini AI will use fallback mode');
+  }
   await Firebase.initializeApp();
   await NotificationService.initialize();
   runApp(const DayCraftApp());
