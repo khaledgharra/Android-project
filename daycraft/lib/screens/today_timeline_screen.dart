@@ -34,7 +34,7 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
 
   // Timeline constants
   static const double hourHeight = 80.0;
-  static const int startHour = 6;
+  static const int startHour = 0;
   static const int endHour = 24;
   static const int totalHours = endHour - startHour;
   static const double totalHeight = totalHours * hourHeight;
@@ -412,12 +412,15 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
 
     return SingleChildScrollView(
       controller: _scrollController,
-      padding: const EdgeInsets.only(bottom: 40),
-      child: SizedBox(height: totalHeight, child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      padding: const EdgeInsets.only(top: 8, bottom: 40),
+      child: SizedBox(height: totalHeight + 16, child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         // Time labels
-        SizedBox(width: timeColumnWidth, height: totalHeight, child: Stack(children: List.generate(totalHours + 1, (i) {
-          return Positioned(top: i * hourHeight - 8, left: 0, right: 0,
-            child: Text("${(startHour + i).toString().padLeft(2, '0')}:00", style: TextStyle(color: Colors.grey.shade500, fontSize: 10, fontWeight: FontWeight.w600), textAlign: TextAlign.center));
+        SizedBox(width: timeColumnWidth, height: totalHeight + 16, child: Stack(children: List.generate(totalHours, (i) {
+          // Skip 00:00 (first) and 24:00 (last) — like Google Calendar
+          final hour = startHour + i + 1;
+          if (hour >= endHour) return const SizedBox.shrink();
+          return Positioned(top: (i + 1) * hourHeight - 7, left: 0, right: 0,
+            child: Text("${hour.toString().padLeft(2, '0')}:00", style: TextStyle(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.w500), textAlign: TextAlign.center));
         }))),
         // Events
         Expanded(child: SizedBox(height: totalHeight, child: Stack(children: [
