@@ -1,17 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import 'api_keys.dart';
 
 class GeminiService {
-  // API key loaded from .env file
-  static String get _apiKey {
-    try {
-      return dotenv.env['GEMINI_API_KEY'] ?? '';
-    } catch (_) {
-      return '';
-    }
-  }
+  // API key loaded from local api_keys.dart (gitignored)
+  static String get _apiKey => geminiApiKey;
   static const String _baseUrl =
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 

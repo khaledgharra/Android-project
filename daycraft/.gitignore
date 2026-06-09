@@ -5,6 +5,7 @@
 *.swp
 .DS_Store
 .env
+lib/services/api_keys.dart
 .atom/
 .build/
 .buildlog/
