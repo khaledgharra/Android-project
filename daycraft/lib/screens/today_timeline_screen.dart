@@ -745,70 +745,71 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
       }).toList();
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Column(children: [
-        // Day headers with deadline dots
-        Row(children: [
-          SizedBox(width: timeColumnWidth, height: headerHeight),
-          ...List.generate(7, (i) {
-            final date = weekDates[i];
-            final isToday = date.year == now.year && date.month == now.month && date.day == now.day;
-            final dayDeadlinesForThis = _deadlinesForDate(date);
-            final hasDeadline = dayDeadlinesForThis.isNotEmpty;
-            return Expanded(child: Container(
-              height: headerHeight,
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: Colors.grey.shade300, width: 0.5)),
-              ),
-              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Text(weekDays[i], style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isToday ? Colors.deepPurple : Colors.grey.shade600)),
-                Container(
-                  width: 24, height: 24,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isToday ? Colors.deepPurple : Colors.transparent,
-                  ),
-                  child: Center(child: Text("${date.day}", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isToday ? Colors.white : Colors.grey.shade500))),
+    return Column(children: [
+      // Day headers with deadline dots (FIXED / STICKY)
+      Row(children: [
+        SizedBox(width: timeColumnWidth, height: headerHeight),
+        ...List.generate(7, (i) {
+          final date = weekDates[i];
+          final isToday = date.year == now.year && date.month == now.month && date.day == now.day;
+          final dayDeadlinesForThis = _deadlinesForDate(date);
+          final hasDeadline = dayDeadlinesForThis.isNotEmpty;
+          return Expanded(child: Container(
+            height: headerHeight,
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: Colors.grey.shade300, width: 0.5)),
+            ),
+            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Text(weekDays[i], style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isToday ? Colors.deepPurple : Colors.grey.shade600)),
+              Container(
+                width: 24, height: 24,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isToday ? Colors.deepPurple : Colors.transparent,
                 ),
-                if (hasDeadline)
-                  Container(margin: const EdgeInsets.only(top: 2), width: 6, height: 6, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle)),
-              ]),
-            ));
-          }),
-        ]),
-        // Deadline banners row for the week
-        if (allDeadlines.any((d) {
-          final dDate = _parseDeadlineDate(d["date"]?.toString());
-          if (dDate == null) return false;
-          return weekDates.any((wd) => wd.year == dDate.year && wd.month == dDate.month && wd.day == dDate.day);
-        }))
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade200, width: 0.5))),
-            child: Row(children: [
-              SizedBox(width: timeColumnWidth),
-              ...List.generate(7, (i) {
-                final dayDl = _deadlinesForDate(weekDates[i]);
-                if (dayDl.isEmpty) return const Expanded(child: SizedBox());
-                return Expanded(child: Column(children: dayDl.take(2).map((dl) {
-                  final type = dl["type"] ?? "";
-                  final color = type == "Exam" ? Colors.red : type == "Quiz" ? Colors.blue : Colors.orange;
-                  return GestureDetector(
-                    onTap: () => _showDeadlineEditSheet(dl),
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 1),
-                      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
-                      decoration: BoxDecoration(color: color.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(4)),
-                      child: Text(dl["title"] ?? "", style: TextStyle(fontSize: 7, fontWeight: FontWeight.w600, color: color), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ),
-                  );
-                }).toList()));
-              }),
+                child: Center(child: Text("${date.day}", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isToday ? Colors.white : Colors.grey.shade500))),
+              ),
+              if (hasDeadline)
+                Container(margin: const EdgeInsets.only(top: 2), width: 6, height: 6, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle)),
             ]),
-          ),
-        SizedBox(
+          ));
+        }),
+      ]),
+      // Deadline banners row for the week (FIXED / STICKY)
+      if (allDeadlines.any((d) {
+        final dDate = _parseDeadlineDate(d["date"]?.toString());
+        if (dDate == null) return false;
+        return weekDates.any((wd) => wd.year == dDate.year && wd.month == dDate.month && wd.day == dDate.day);
+      }))
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade200, width: 0.5))),
+          child: Row(children: [
+            SizedBox(width: timeColumnWidth),
+            ...List.generate(7, (i) {
+              final dayDl = _deadlinesForDate(weekDates[i]);
+              if (dayDl.isEmpty) return const Expanded(child: SizedBox());
+              return Expanded(child: Column(children: dayDl.take(2).map((dl) {
+                final type = dl["type"] ?? "";
+                final color = type == "Exam" ? Colors.red : type == "Quiz" ? Colors.blue : Colors.orange;
+                return GestureDetector(
+                  onTap: () => _showDeadlineEditSheet(dl),
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 1),
+                    padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+                    decoration: BoxDecoration(color: color.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(4)),
+                    child: Text(dl["title"] ?? "", style: TextStyle(fontSize: 7, fontWeight: FontWeight.w600, color: color), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
+                );
+              }).toList()));
+            }),
+          ]),
+        ),
+      // Scrollable time grid
+      Expanded(child: SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: 20),
+        child: SizedBox(
           height: totalHours * weekHourHeight,
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             SizedBox(width: timeColumnWidth, height: totalHours * weekHourHeight,
@@ -854,7 +855,7 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
             }),
           ]),
         ),
-      ]),
-    );
+      )),
+    ]);
   }
 }
