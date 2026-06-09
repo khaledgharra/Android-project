@@ -276,46 +276,8 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
                             width: 1.5,
                           ),
                         ),
-                        child: ListTile(
-                          tileColor: Colors.transparent,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 4,
-                          ),
-                          leading: GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                if (isSelected) {
-                                  selectedIndices.remove(index);
-                                } else {
-                                  selectedIndices.add(index);
-                                }
-                              });
-                            },
-                            child: Container(
-                              width: 28,
-                              height: 28,
-                              decoration: BoxDecoration(
-                                color: isSelected ? Colors.deepPurple : Colors.transparent,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: isSelected ? Colors.deepPurple : Colors.grey.shade400,
-                                  width: 2,
-                                ),
-                              ),
-                              child: isSelected
-                                  ? const Icon(Icons.check, color: Colors.white, size: 16)
-                                  : null,
-                            ),
-                          ),
-                          title: Text(
-                            generatedTasks[index],
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: isSelected ? Colors.black87 : Colors.grey.shade600,
-                            ),
-                          ),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(14),
                           onTap: () {
                             setState(() {
                               if (isSelected) {
@@ -325,6 +287,39 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
                               }
                             });
                           },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 28,
+                                  height: 28,
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? Colors.deepPurple : Colors.transparent,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: isSelected ? Colors.deepPurple : Colors.grey.shade400,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: isSelected
+                                      ? const Icon(Icons.check, color: Colors.white, size: 16)
+                                      : null,
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Text(
+                                    generatedTasks[index],
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: isSelected ? Colors.black87 : Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       );
                     },
