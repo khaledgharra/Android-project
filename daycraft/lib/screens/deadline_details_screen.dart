@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/storage_service.dart';
+import 'ai_assistant_screen.dart';
 
 class DeadlineDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> deadline;
@@ -85,6 +86,25 @@ class _DeadlineDetailsScreenState extends State<DeadlineDetailsScreen> {
       appBar: AppBar(
         title: Text(widget.deadline["title"] ?? "Deadline"),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.auto_awesome, color: Colors.deepPurple),
+            tooltip: "AI Generate Tasks",
+            onPressed: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => AIAssistantScreen(
+                    deadlineId: widget.deadline['id'],
+                    deadlineTitle: widget.deadline['title'],
+                    courseName: widget.deadline['course'],
+                  ),
+                ),
+              );
+              if (result == true) {
+                await loadSubtasks();
+              }
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.cleaning_services),
             onPressed: () async {
