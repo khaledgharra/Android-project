@@ -313,145 +313,109 @@ class _CoursesScreenState extends State<CoursesScreen> {
                           }).toList(),
                     ),
 
-                    const Text(
-                      "Lecture Time (Optional)",
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    DropdownButton<String>(
-                      value: lectureDay,
-                      isExpanded: true,
-
-                      items: days.map((day) {
-                        return DropdownMenuItem(value: day, child: Text(day));
-                      }).toList(),
-
-                      onChanged: (value) {
-                        setDialogState(() {
-                          lectureDay = value!;
-                        });
-                      },
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    ElevatedButton(
-                      onPressed: () async {
-                        final picked = await showTimePicker(
-                          context: context,
-                          initialTime: lectureStart ?? const TimeOfDay(hour: 8, minute: 0),
-                          initialEntryMode: TimePickerEntryMode.input,
-                        );
-
-                        if (picked != null) {
-                          setDialogState(() {
-                            lectureStart = picked;
-                          });
-                        }
-                      },
-
-                      child: Text(
-                        lectureStart == null
-                            ? "Select Lecture Start"
-                            : lectureStart!.format(context),
+                    // --- LECTURE SCHEDULE ---
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text("Lecture", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.deepPurple)),
+                          const SizedBox(height: 10),
+                          // Day row
+                          _timeFieldRow(
+                            icon: Icons.calendar_today,
+                            label: "Day",
+                            value: lectureDay,
+                            onTap: () async {
+                              final picked = await showModalBottomSheet<String>(
+                                context: context,
+                                builder: (ctx) => _dayPickerSheet(ctx, days),
+                              );
+                              if (picked != null) setDialogState(() => lectureDay = picked);
+                            },
+                          ),
+                          const Divider(height: 16),
+                          // Time row
+                          Row(children: [
+                            Expanded(child: _timeFieldRow(
+                              icon: Icons.play_arrow_rounded,
+                              label: "Start",
+                              value: lectureStart?.format(context) ?? "—",
+                              onTap: () async {
+                                final picked = await showTimePicker(context: context, initialTime: lectureStart ?? const TimeOfDay(hour: 8, minute: 0), initialEntryMode: TimePickerEntryMode.input);
+                                if (picked != null) setDialogState(() => lectureStart = picked);
+                              },
+                            )),
+                            const SizedBox(width: 8),
+                            Expanded(child: _timeFieldRow(
+                              icon: Icons.stop_rounded,
+                              label: "End",
+                              value: lectureEnd?.format(context) ?? "—",
+                              onTap: () async {
+                                final picked = await showTimePicker(context: context, initialTime: lectureEnd ?? lectureStart ?? const TimeOfDay(hour: 9, minute: 0), initialEntryMode: TimePickerEntryMode.input);
+                                if (picked != null) setDialogState(() => lectureEnd = picked);
+                              },
+                            )),
+                          ]),
+                        ],
                       ),
                     ),
 
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 14),
 
-                    ElevatedButton(
-                      onPressed: () async {
-                        final picked = await showTimePicker(
-                          context: context,
-                          initialTime: lectureEnd ?? lectureStart ?? const TimeOfDay(hour: 8, minute: 0),
-                          initialEntryMode: TimePickerEntryMode.input,
-                        );
-
-                        if (picked != null) {
-                          setDialogState(() {
-                            lectureEnd = picked;
-                          });
-                        }
-                      },
-
-                      child: Text(
-                        lectureEnd == null
-                            ? "Select Lecture End"
-                            : lectureEnd!.format(context),
+                    // --- TUTORIAL SCHEDULE ---
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.grey.shade200),
                       ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    const Text(
-                      "Tutorial Time (Optional)",
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    DropdownButton<String>(
-                      value: tutorialDay,
-                      isExpanded: true,
-
-                      items: days.map((day) {
-                        return DropdownMenuItem(value: day, child: Text(day));
-                      }).toList(),
-
-                      onChanged: (value) {
-                        setDialogState(() {
-                          tutorialDay = value!;
-                        });
-                      },
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    ElevatedButton(
-                      onPressed: () async {
-                        final picked = await showTimePicker(
-                          context: context,
-                          initialTime: tutorialStart ?? const TimeOfDay(hour: 8, minute: 0),
-                          initialEntryMode: TimePickerEntryMode.input,
-                        );
-
-                        if (picked != null) {
-                          setDialogState(() {
-                            tutorialStart = picked;
-                          });
-                        }
-                      },
-
-                      child: Text(
-                        tutorialStart == null
-                            ? "Select Tutorial Start"
-                            : tutorialStart!.format(context),
-                      ),
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    ElevatedButton(
-                      onPressed: () async {
-                        final picked = await showTimePicker(
-                          context: context,
-                          initialTime: tutorialEnd ?? tutorialStart ?? const TimeOfDay(hour: 8, minute: 0),
-                          initialEntryMode: TimePickerEntryMode.input,
-                        );
-
-                        if (picked != null) {
-                          setDialogState(() {
-                            tutorialEnd = picked;
-                          });
-                        }
-                      },
-
-                      child: Text(
-                        tutorialEnd == null
-                            ? "Select Tutorial End"
-                            : tutorialEnd!.format(context),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text("Tutorial (Optional)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.teal)),
+                          const SizedBox(height: 10),
+                          _timeFieldRow(
+                            icon: Icons.calendar_today,
+                            label: "Day",
+                            value: tutorialDay,
+                            onTap: () async {
+                              final picked = await showModalBottomSheet<String>(
+                                context: context,
+                                builder: (ctx) => _dayPickerSheet(ctx, days),
+                              );
+                              if (picked != null) setDialogState(() => tutorialDay = picked);
+                            },
+                          ),
+                          const Divider(height: 16),
+                          Row(children: [
+                            Expanded(child: _timeFieldRow(
+                              icon: Icons.play_arrow_rounded,
+                              label: "Start",
+                              value: tutorialStart?.format(context) ?? "—",
+                              onTap: () async {
+                                final picked = await showTimePicker(context: context, initialTime: tutorialStart ?? const TimeOfDay(hour: 8, minute: 0), initialEntryMode: TimePickerEntryMode.input);
+                                if (picked != null) setDialogState(() => tutorialStart = picked);
+                              },
+                            )),
+                            const SizedBox(width: 8),
+                            Expanded(child: _timeFieldRow(
+                              icon: Icons.stop_rounded,
+                              label: "End",
+                              value: tutorialEnd?.format(context) ?? "—",
+                              onTap: () async {
+                                final picked = await showTimePicker(context: context, initialTime: tutorialEnd ?? tutorialStart ?? const TimeOfDay(hour: 9, minute: 0), initialEntryMode: TimePickerEntryMode.input);
+                                if (picked != null) setDialogState(() => tutorialEnd = picked);
+                              },
+                            )),
+                          ]),
+                        ],
                       ),
                     ),
                   ],
@@ -807,6 +771,55 @@ class _CoursesScreenState extends State<CoursesScreen> {
     Navigator.pop(context);
 
     clearControllers();
+  }
+
+  Widget _timeFieldRow({required IconData icon, required String label, required String value, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: value != "—" ? Colors.deepPurple.shade100 : Colors.grey.shade300),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: value != "—" ? Colors.deepPurple : Colors.grey),
+            const SizedBox(width: 6),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: TextStyle(fontSize: 10, color: Colors.grey.shade500)),
+                Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: value != "—" ? Colors.black87 : Colors.grey)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _dayPickerSheet(BuildContext ctx, List<String> days) {
+    return SafeArea(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text("Select Day", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
+            ...days.map((day) => ListTile(
+              title: Text(day),
+              leading: const Icon(Icons.calendar_today_outlined, size: 18),
+              onTap: () => Navigator.pop(ctx, day),
+            )),
+          ],
+        ),
+      ),
+    );
   }
 
   void clearControllers() {
