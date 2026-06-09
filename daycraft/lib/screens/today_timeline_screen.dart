@@ -781,7 +781,7 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.05), border: Border(bottom: BorderSide(color: Colors.grey.shade200, width: 0.5))),
+            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade200, width: 0.5))),
             child: Row(children: [
               SizedBox(width: timeColumnWidth),
               ...List.generate(7, (i) {
@@ -790,11 +790,14 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
                 return Expanded(child: Column(children: dayDl.take(2).map((dl) {
                   final type = dl["type"] ?? "";
                   final color = type == "Exam" ? Colors.red : type == "Quiz" ? Colors.blue : Colors.orange;
-                  return Container(
-                    margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 1),
-                    padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
-                    decoration: BoxDecoration(color: color.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(4)),
-                    child: Text(dl["title"] ?? "", style: TextStyle(fontSize: 7, fontWeight: FontWeight.w600, color: color), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  return GestureDetector(
+                    onTap: () => _showDeadlineEditSheet(dl),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 1),
+                      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+                      decoration: BoxDecoration(color: color.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(4)),
+                      child: Text(dl["title"] ?? "", style: TextStyle(fontSize: 7, fontWeight: FontWeight.w600, color: color), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
                   );
                 }).toList()));
               }),
