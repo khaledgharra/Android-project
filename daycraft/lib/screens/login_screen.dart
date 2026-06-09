@@ -46,6 +46,7 @@ class _LoginScreenState extends State<LoginScreen> {
       password: passwordController.text,
     );
 
+    if (!mounted) return;
     setState(() => isLoading = false);
 
     if (error != null) {

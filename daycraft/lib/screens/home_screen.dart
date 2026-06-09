@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'schedule_screen.dart';
+import 'today_timeline_screen.dart';
 import '../services/storage_service.dart';
 import '../services/auth_service.dart';
 import 'deadlines_screen.dart';
@@ -13,13 +13,113 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  int _currentIndex = 0;
+  final GlobalKey<DashboardTabState> _dashboardKey = GlobalKey<DashboardTabState>();
+  final GlobalKey<TodayTimelineScreenState> _calendarKey = GlobalKey<TodayTimelineScreenState>();
+  final GlobalKey<CoursesScreenState> _coursesKey = GlobalKey<CoursesScreenState>();
+  final GlobalKey<DeadlinesScreenState> _deadlinesKey = GlobalKey<DeadlinesScreenState>();
+
+  late final List<Widget> _screens;
+
+  @override
+  void initState() {
+    super.initState();
+    _screens = [
+      DashboardTab(key: _dashboardKey),
+      TodayTimelineScreen(key: _calendarKey),
+      CoursesScreen(key: _coursesKey),
+      DeadlinesScreen(key: _deadlinesKey),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: IndexedStack(
+        index: _currentIndex,
+        children: _screens,
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 20, offset: const Offset(0, -4))],
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildNavItem(0, Icons.home_rounded, "Home"),
+                _buildNavItem(1, Icons.calendar_today_rounded, "Calendar"),
+                _buildNavItem(2, Icons.school_rounded, "Courses"),
+                _buildNavItem(3, Icons.assignment_rounded, "Deadlines"),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem(int index, IconData icon, String label) {
+    final isSelected = _currentIndex == index;
+    return GestureDetector(
+      onTap: () {
+        setState(() => _currentIndex = index);
+        // Refresh the target tab's data on switch
+        switch (index) {
+          case 0:
+            _dashboardKey.currentState?.loadTodayTasks();
+            _dashboardKey.currentState?.loadUpcomingDeadlines();
+            break;
+          case 1:
+            _calendarKey.currentState?.loadTodayEvents();
+            break;
+          case 2:
+            _coursesKey.currentState?.loadCourses();
+            break;
+          case 3:
+            _deadlinesKey.currentState?.loadDeadlines();
+            break;
+        }
+      },
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: EdgeInsets.symmetric(horizontal: isSelected ? 16 : 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.deepPurple.withValues(alpha: 0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 22, color: isSelected ? Colors.deepPurple : Colors.grey.shade400),
+            if (isSelected) ...[
+              const SizedBox(width: 6),
+              Text(label, style: const TextStyle(color: Colors.deepPurple, fontSize: 12, fontWeight: FontWeight.w700)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The Dashboard / Home tab with greetings, urgent deadlines, and today's quick summary
+class DashboardTab extends StatefulWidget {
+  const DashboardTab({super.key});
+
+  @override
+  State<DashboardTab> createState() => DashboardTabState();
+}
+
+class DashboardTabState extends State<DashboardTab> {
   List<Map<String, dynamic>> todayTasks = [];
   List<Map<String, dynamic>> upcomingDeadlines = [];
 
-  final TextEditingController taskController = TextEditingController();
-
-  // Premium design theme configurations
-  final Color backgroundColor = const Color(0xFFFDFBF7); // Soft Ivory/Cream
+  final Color backgroundColor = const Color(0xFFFDFBF7);
   final Color primaryAccent = Colors.deepPurple;
   final Color cardColor = Colors.white;
 
@@ -34,40 +134,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: backgroundColor,
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 0,
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: primaryAccent,
-        unselectedItemColor: Colors.grey.shade400,
-        backgroundColor: cardColor,
-        elevation: 8,
-        onTap: (index) {
-          if (index == 1) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const ScheduleScreen()),
-            ).then((_) => loadTodayTasks());
-          }
-          if (index == 2) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const CoursesScreen()),
-            );
-          }
-          if (index == 3) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const DeadlinesScreen()),
-            ).then((_) => loadUpcomingDeadlines());
-          }
-        },
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: "Home"),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_today_rounded), label: "Calendar"),
-          BottomNavigationBarItem(icon: Icon(Icons.school_rounded), label: "Courses"),
-          BottomNavigationBarItem(icon: Icon(Icons.warning_amber_rounded), label: "Deadlines"),
-        ],
-      ),
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
@@ -99,7 +165,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         color: cardColor,
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
-                          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+                          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4)),
                         ],
                       ),
                       child: IconButton(
@@ -111,15 +177,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                
-                // Static Contextual Date Header
+
+                // Date Header
                 Text(
                   getFormattedDate(),
-                  style: TextStyle(fontSize: 15, color: primaryAccent.withOpacity(0.8), fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 15, color: primaryAccent.withValues(alpha: 0.8), fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 28),
 
-                // --- MID SECTION: HORIZONTAL URGENT DEADLINES ---
+                // --- URGENT DEADLINES ---
                 const Text(
                   "Urgent Deadlines ⚡",
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: -0.3),
@@ -128,7 +194,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 _buildDeadlinesCarousel(),
                 const SizedBox(height: 32),
 
-                // --- BOTTOM SECTION: TODAY'S EXECUTION TIMELINE ---
+                // --- TODAY'S UPCOMING SCHEDULE ---
                 const Text(
                   "Today's Schedule 📅",
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: -0.3),
@@ -144,7 +210,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Horizontal Carousel for Deadlines
   Widget _buildDeadlinesCarousel() {
     if (upcomingDeadlines.isEmpty) {
       return Container(
@@ -164,7 +229,7 @@ class _HomeScreenState extends State<HomeScreen> {
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
-        itemCount: upcomingDeadlines.take(3).length,
+        itemCount: upcomingDeadlines.take(5).length,
         itemBuilder: (context, index) {
           final item = upcomingDeadlines[index];
           return Container(
@@ -176,7 +241,7 @@ class _HomeScreenState extends State<HomeScreen> {
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.red.withOpacity(0.08),
+                  color: Colors.red.withValues(alpha: 0.08),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -212,7 +277,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Clean Task Stack View
   Widget _buildTasksTimeline() {
     if (todayTasks.isEmpty) {
       return Container(
@@ -222,7 +286,7 @@ class _HomeScreenState extends State<HomeScreen> {
           color: cardColor,
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4)),
+            BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4)),
           ],
         ),
         child: const Center(
@@ -237,12 +301,12 @@ class _HomeScreenState extends State<HomeScreen> {
       itemCount: todayTasks.length,
       itemBuilder: (context, index) {
         final task = todayTasks[index];
-        return scheduleCard(task);
+        return _scheduleCard(task);
       },
     );
   }
 
-  Widget scheduleCard(Map<String, dynamic> task) {
+  Widget _scheduleCard(Map<String, dynamic> task) {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(18),
@@ -251,7 +315,7 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -264,7 +328,7 @@ class _HomeScreenState extends State<HomeScreen> {
             width: 4,
             height: 45,
             decoration: BoxDecoration(
-              color: primaryAccent.withOpacity(0.6),
+              color: primaryAccent.withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -319,7 +383,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // --- Core Parsers & Helpers ---
+  // --- Helpers ---
   (int, int) _parseTime(String time) {
     final cleaned = time.trim().toUpperCase();
     final isPM = cleaned.contains("PM");
@@ -328,7 +392,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final parts = withoutPeriod.split(":");
     int hour = int.parse(parts[0].trim());
     int minute = parts.length > 1 ? int.parse(parts[1].trim()) : 0;
-
     if (isPM && hour != 12) hour += 12;
     if (isAM && hour == 12) hour = 0;
     return (hour, minute);
@@ -337,7 +400,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> loadTodayTasks() async {
     final allTasks = await StorageService.loadSchedule();
     final now = DateTime.now();
-    final currentDay = getDayName(now.weekday);
+    final currentDay = _getDayName(now.weekday);
     final currentHour = now.hour;
     final currentMinute = now.minute;
 
@@ -353,6 +416,13 @@ class _HomeScreenState extends State<HomeScreen> {
         filtered.add(task);
       }
     }
+
+    // Sort by start time
+    filtered.sort((a, b) {
+      final (aH, aM) = _parseTime(a["start"]!);
+      final (bH, bM) = _parseTime(b["start"]!);
+      return (aH * 60 + aM).compareTo(bH * 60 + bM);
+    });
 
     if (!mounted) return;
     setState(() => todayTasks = filtered);
@@ -372,19 +442,16 @@ class _HomeScreenState extends State<HomeScreen> {
     return null;
   }
 
-  // Filter and display upcoming deadlines
   Future<void> loadUpcomingDeadlines() async {
     final allDeadlines = await StorageService.loadDeadlines();
     final now = DateTime.now();
 
-    // Filter to only show deadlines that haven't passed yet
     final upcoming = allDeadlines.where((d) {
       final date = _parseDeadlineDate(d["date"]?.toString());
-      if (date == null) return true; // Show if we can't parse (safety)
+      if (date == null) return true;
       return date.isAfter(now.subtract(const Duration(days: 1)));
     }).toList();
 
-    // Sort by date (soonest first)
     upcoming.sort((a, b) {
       final dateA = _parseDeadlineDate(a["date"]?.toString());
       final dateB = _parseDeadlineDate(b["date"]?.toString());
@@ -398,7 +465,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  String getDayName(int weekday) {
+  String _getDayName(int weekday) {
     switch (weekday) {
       case 1: return "Monday";
       case 2: return "Tuesday";
@@ -420,7 +487,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String getFormattedDate() {
     final now = DateTime.now();
-    final day = getDayName(now.weekday);
+    final day = _getDayName(now.weekday);
     return "$day, ${now.day}/${now.month}/${now.year}";
   }
 
