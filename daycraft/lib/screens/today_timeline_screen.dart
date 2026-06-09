@@ -329,9 +329,15 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
   // =================== ADD EVENT DIALOG ===================
   void _showAddEventDialog() {
     final titleController = TextEditingController();
-    String selectedDay = _getDayName(selectedDate.weekday);
+    DateTime eventDate = selectedDate;
     TimeOfDay? startTime;
     TimeOfDay? endTime;
+
+    String _formatEventDate(DateTime date) {
+      final dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+      final monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+      return "${dayNames[date.weekday - 1]}, ${date.day} ${monthNames[date.month - 1]}";
+    }
 
     showDialog(
       context: context,
@@ -351,25 +357,24 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              // Day picker
+              // Date picker
               GestureDetector(
                 onTap: () async {
-                  final picked = await showModalBottomSheet<String>(
+                  final picked = await showDatePicker(
                     context: context,
-                    builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      const Padding(padding: EdgeInsets.all(12), child: Text("Select Day", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-                      ...fullDayNames.map((d) => ListTile(title: Text(d), onTap: () => Navigator.pop(ctx, d))),
-                    ])),
+                    initialDate: eventDate,
+                    firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                    lastDate: DateTime(2030),
                   );
-                  if (picked != null) setDialogState(() => selectedDay = picked);
+                  if (picked != null) setDialogState(() => eventDate = picked);
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+                  decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.deepPurple.shade200)),
                   child: Row(children: [
                     const Icon(Icons.calendar_today, size: 16, color: Colors.deepPurple),
                     const SizedBox(width: 10),
-                    Text(selectedDay, style: const TextStyle(fontWeight: FontWeight.w600)),
+                    Text(_formatEventDate(eventDate), style: const TextStyle(fontWeight: FontWeight.w600)),
                     const Spacer(),
                     const Icon(Icons.arrow_drop_down, color: Colors.grey),
                   ]),
@@ -413,7 +418,7 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
                 final newItem = {
                   "title": titleController.text.trim(),
                   "type": "Activity",
-                  "day": selectedDay,
+                  "day": _getDayName(eventDate.weekday),
                   "start": startTime!.format(context),
                   "end": endTime!.format(context),
                 };
