@@ -249,6 +249,7 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
       leading: Icon(icon, color: color ?? Colors.grey.shade700, size: 22),
       title: Text(label, style: TextStyle(fontWeight: FontWeight.w500, color: color ?? Colors.black87)),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      tileColor: Colors.transparent,
       onTap: onTap,
     );
   }
@@ -346,6 +347,7 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
               title: const Text("Skip this occurrence"),
               subtitle: const Text("Remove only for this week"),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              tileColor: Colors.transparent,
               onTap: () => Navigator.pop(ctx, "skip"),
             ),
             if (!isCourse) ...[
@@ -355,6 +357,7 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
                 title: const Text("Delete all occurrences"),
                 subtitle: const Text("Remove from every week"),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                tileColor: Colors.transparent,
                 onTap: () => Navigator.pop(ctx, "all"),
               ),
             ],
