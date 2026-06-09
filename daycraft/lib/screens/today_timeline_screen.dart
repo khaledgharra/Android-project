@@ -948,10 +948,13 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
                     final top = sMins * (weekHourHeight / 60);
                     final h = dur * (weekHourHeight / 60);
                     final color = Color(event["color"] ?? Colors.deepPurple.toARGB32());
-                    return Positioned(top: top, left: 1, right: 1, child: Container(
-                      height: h < 18 ? 18 : h, padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
-                      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(6)),
-                      child: Text(event["title"] ?? event["name"] ?? "", style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    return Positioned(top: top, left: 1, right: 1, child: GestureDetector(
+                      onTap: () => _showEventEditSheet(event),
+                      child: Container(
+                        height: h < 18 ? 18 : h, padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+                        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(6)),
+                        child: Text(event["title"] ?? event["name"] ?? "", style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ),
                     ));
                   }),
                   if (isToday) Positioned(
