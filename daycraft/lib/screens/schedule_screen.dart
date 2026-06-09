@@ -206,102 +206,52 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
                           const SizedBox(height: 16),
 
-                          Row(
-                            children: [
-                              Expanded(
-                                child: GestureDetector(
-                                  onTap: () async {
-                                    final picked = await showTimePicker(
-                                      context: context,
-                                      initialTime: startTime ?? const TimeOfDay(hour: 8, minute: 0),
-                                      initialEntryMode: TimePickerEntryMode.input,
-                                    );
-
-                                    if (picked != null) {
-                                      setDialogState(() {
-                                        startTime = picked;
-                                      });
-                                    }
-                                  },
-
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: startTime != null ? Colors.deepPurple.shade200 : Colors.grey.shade300,
-                                      ),
-                                    ),
-
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.access_time, size: 18, color: startTime != null ? Colors.deepPurple : Colors.grey),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          startTime == null
-                                              ? "Start"
-                                              : startTime!.format(context),
-                                          style: TextStyle(
-                                            fontWeight: startTime != null ? FontWeight.w600 : FontWeight.normal,
-                                            color: startTime != null ? Colors.black87 : Colors.grey,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
+                          // Single tap chains start → end
+                          GestureDetector(
+                            onTap: () async {
+                              final pickedStart = await showTimePicker(
+                                context: context,
+                                initialTime: startTime ?? const TimeOfDay(hour: 8, minute: 0),
+                                initialEntryMode: TimePickerEntryMode.input,
+                                helpText: "START TIME",
+                              );
+                              if (pickedStart == null) return;
+                              setDialogState(() => startTime = pickedStart);
+                              final pickedEnd = await showTimePicker(
+                                context: context,
+                                initialTime: endTime ?? pickedStart,
+                                initialEntryMode: TimePickerEntryMode.input,
+                                helpText: "END TIME",
+                              );
+                              if (pickedEnd != null) setDialogState(() => endTime = pickedEnd);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: (startTime != null && endTime != null) ? Colors.deepPurple.shade200 : Colors.grey.shade300,
                                 ),
                               ),
-
-                              const SizedBox(width: 10),
-
-                              Expanded(
-                                child: GestureDetector(
-                                  onTap: () async {
-                                    final picked = await showTimePicker(
-                                      context: context,
-                                      initialTime: endTime ?? startTime ?? const TimeOfDay(hour: 9, minute: 0),
-                                      initialEntryMode: TimePickerEntryMode.input,
-                                    );
-
-                                    if (picked != null) {
-                                      setDialogState(() {
-                                        endTime = picked;
-                                      });
-                                    }
-                                  },
-
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: endTime != null ? Colors.deepPurple.shade200 : Colors.grey.shade300,
-                                      ),
-                                    ),
-
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.access_time_filled, size: 18, color: endTime != null ? Colors.deepPurple : Colors.grey),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          endTime == null
-                                              ? "End"
-                                              : endTime!.format(context),
-                                          style: TextStyle(
-                                            fontWeight: endTime != null ? FontWeight.w600 : FontWeight.normal,
-                                            color: endTime != null ? Colors.black87 : Colors.grey,
-                                          ),
-                                        ),
-                                      ],
+                              child: Row(
+                                children: [
+                                  Icon(Icons.schedule_rounded, size: 18, color: startTime != null ? Colors.deepPurple : Colors.grey),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    startTime != null && endTime != null
+                                        ? "${startTime!.format(context)}  →  ${endTime!.format(context)}"
+                                        : startTime != null
+                                            ? "${startTime!.format(context)}  →  End?"
+                                            : "Set time...",
+                                    style: TextStyle(
+                                      fontWeight: startTime != null ? FontWeight.w600 : FontWeight.normal,
+                                      color: startTime != null ? Colors.black87 : Colors.grey,
                                     ),
                                   ),
-                                ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
                         ],
                       ),

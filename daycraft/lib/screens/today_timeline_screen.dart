@@ -308,40 +308,34 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              // Time pickers
-              Row(children: [
-                Expanded(child: GestureDetector(
-                  onTap: () async {
-                    final picked = await showTimePicker(context: context, initialTime: startTime ?? const TimeOfDay(hour: 8, minute: 0), initialEntryMode: TimePickerEntryMode.input);
-                    if (picked != null) setDialogState(() => startTime = picked);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: startTime != null ? Colors.deepPurple.shade200 : Colors.grey.shade200)),
-                    child: Row(children: [
-                      Icon(Icons.play_arrow_rounded, size: 16, color: startTime != null ? Colors.deepPurple : Colors.grey),
-                      const SizedBox(width: 6),
-                      Text(startTime?.format(context) ?? "Start", style: TextStyle(fontWeight: FontWeight.w600, color: startTime != null ? Colors.black87 : Colors.grey)),
-                    ]),
-                  ),
-                )),
-                const SizedBox(width: 10),
-                Expanded(child: GestureDetector(
-                  onTap: () async {
-                    final picked = await showTimePicker(context: context, initialTime: endTime ?? startTime ?? const TimeOfDay(hour: 9, minute: 0), initialEntryMode: TimePickerEntryMode.input);
-                    if (picked != null) setDialogState(() => endTime = picked);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: endTime != null ? Colors.deepPurple.shade200 : Colors.grey.shade200)),
-                    child: Row(children: [
-                      Icon(Icons.stop_rounded, size: 16, color: endTime != null ? Colors.deepPurple : Colors.grey),
-                      const SizedBox(width: 6),
-                      Text(endTime?.format(context) ?? "End", style: TextStyle(fontWeight: FontWeight.w600, color: endTime != null ? Colors.black87 : Colors.grey)),
-                    ]),
-                  ),
-                )),
-              ]),
+              // Time picker — single tap opens start then auto-chains to end
+              GestureDetector(
+                onTap: () async {
+                  // Pick start time
+                  final pickedStart = await showTimePicker(context: context, initialTime: startTime ?? const TimeOfDay(hour: 8, minute: 0), initialEntryMode: TimePickerEntryMode.input, helpText: "START TIME");
+                  if (pickedStart == null) return;
+                  setDialogState(() => startTime = pickedStart);
+                  // Auto-chain to end time
+                  final pickedEnd = await showTimePicker(context: context, initialTime: endTime ?? pickedStart, initialEntryMode: TimePickerEntryMode.input, helpText: "END TIME");
+                  if (pickedEnd != null) setDialogState(() => endTime = pickedEnd);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: (startTime != null && endTime != null) ? Colors.deepPurple.shade200 : Colors.grey.shade200)),
+                  child: Row(children: [
+                    Icon(Icons.schedule_rounded, size: 18, color: startTime != null ? Colors.deepPurple : Colors.grey),
+                    const SizedBox(width: 10),
+                    Text(
+                      startTime != null && endTime != null
+                          ? "${startTime!.format(context)}  →  ${endTime!.format(context)}"
+                          : startTime != null
+                              ? "${startTime!.format(context)}  →  End?"
+                              : "Set time...",
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: startTime != null ? Colors.black87 : Colors.grey),
+                    ),
+                  ]),
+                ),
+              ),
             ]),
           ),
           actions: [

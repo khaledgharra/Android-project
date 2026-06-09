@@ -340,28 +340,21 @@ class _CoursesScreenState extends State<CoursesScreen> {
                             },
                           ),
                           const Divider(height: 16),
-                          // Time row
-                          Row(children: [
-                            Expanded(child: _timeFieldRow(
-                              icon: Icons.play_arrow_rounded,
-                              label: "Start",
-                              value: lectureStart?.format(context) ?? "—",
-                              onTap: () async {
-                                final picked = await showTimePicker(context: context, initialTime: lectureStart ?? const TimeOfDay(hour: 8, minute: 0), initialEntryMode: TimePickerEntryMode.input);
-                                if (picked != null) setDialogState(() => lectureStart = picked);
-                              },
-                            )),
-                            const SizedBox(width: 8),
-                            Expanded(child: _timeFieldRow(
-                              icon: Icons.stop_rounded,
-                              label: "End",
-                              value: lectureEnd?.format(context) ?? "—",
-                              onTap: () async {
-                                final picked = await showTimePicker(context: context, initialTime: lectureEnd ?? lectureStart ?? const TimeOfDay(hour: 9, minute: 0), initialEntryMode: TimePickerEntryMode.input);
-                                if (picked != null) setDialogState(() => lectureEnd = picked);
-                              },
-                            )),
-                          ]),
+                          // Time row — single tap chains start → end
+                          _timeFieldRow(
+                            icon: Icons.schedule_rounded,
+                            label: "Time",
+                            value: lectureStart != null && lectureEnd != null
+                                ? "${lectureStart!.format(context)} → ${lectureEnd!.format(context)}"
+                                : "Set time...",
+                            onTap: () async {
+                              final pickedStart = await showTimePicker(context: context, initialTime: lectureStart ?? const TimeOfDay(hour: 8, minute: 0), initialEntryMode: TimePickerEntryMode.input, helpText: "LECTURE START");
+                              if (pickedStart == null) return;
+                              setDialogState(() => lectureStart = pickedStart);
+                              final pickedEnd = await showTimePicker(context: context, initialTime: lectureEnd ?? pickedStart, initialEntryMode: TimePickerEntryMode.input, helpText: "LECTURE END");
+                              if (pickedEnd != null) setDialogState(() => lectureEnd = pickedEnd);
+                            },
+                          ),
                         ],
                       ),
                     ),
@@ -394,27 +387,20 @@ class _CoursesScreenState extends State<CoursesScreen> {
                             },
                           ),
                           const Divider(height: 16),
-                          Row(children: [
-                            Expanded(child: _timeFieldRow(
-                              icon: Icons.play_arrow_rounded,
-                              label: "Start",
-                              value: tutorialStart?.format(context) ?? "—",
-                              onTap: () async {
-                                final picked = await showTimePicker(context: context, initialTime: tutorialStart ?? const TimeOfDay(hour: 8, minute: 0), initialEntryMode: TimePickerEntryMode.input);
-                                if (picked != null) setDialogState(() => tutorialStart = picked);
-                              },
-                            )),
-                            const SizedBox(width: 8),
-                            Expanded(child: _timeFieldRow(
-                              icon: Icons.stop_rounded,
-                              label: "End",
-                              value: tutorialEnd?.format(context) ?? "—",
-                              onTap: () async {
-                                final picked = await showTimePicker(context: context, initialTime: tutorialEnd ?? tutorialStart ?? const TimeOfDay(hour: 9, minute: 0), initialEntryMode: TimePickerEntryMode.input);
-                                if (picked != null) setDialogState(() => tutorialEnd = picked);
-                              },
-                            )),
-                          ]),
+                          _timeFieldRow(
+                            icon: Icons.schedule_rounded,
+                            label: "Time",
+                            value: tutorialStart != null && tutorialEnd != null
+                                ? "${tutorialStart!.format(context)} → ${tutorialEnd!.format(context)}"
+                                : "Set time...",
+                            onTap: () async {
+                              final pickedStart = await showTimePicker(context: context, initialTime: tutorialStart ?? const TimeOfDay(hour: 8, minute: 0), initialEntryMode: TimePickerEntryMode.input, helpText: "TUTORIAL START");
+                              if (pickedStart == null) return;
+                              setDialogState(() => tutorialStart = pickedStart);
+                              final pickedEnd = await showTimePicker(context: context, initialTime: tutorialEnd ?? pickedStart, initialEntryMode: TimePickerEntryMode.input, helpText: "TUTORIAL END");
+                              if (pickedEnd != null) setDialogState(() => tutorialEnd = pickedEnd);
+                            },
+                          ),
                         ],
                       ),
                     ),
