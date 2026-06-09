@@ -685,7 +685,7 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
         // Time labels
         SizedBox(width: timeColumnWidth, height: totalHeight + 16, child: Stack(children: List.generate(totalHours, (i) {
           final hour = startHour + i + 1;
-          if (hour >= endHour) return const SizedBox.shrink();
+          if (hour >= endHour || hour <= startHour) return const SizedBox.shrink();
           return Positioned(top: (i + 1) * hourHeight - 7, left: 0, right: 0,
             child: Text("${hour.toString().padLeft(2, '0')}:00", style: TextStyle(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.w500), textAlign: TextAlign.center));
         }))),
@@ -813,8 +813,10 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             SizedBox(width: timeColumnWidth, height: totalHours * weekHourHeight,
               child: Stack(children: List.generate(totalHours + 1, (i) {
+                final hour = startHour + i;
+                if (hour <= startHour || hour >= endHour) return const Positioned(top: 0, child: SizedBox.shrink());
                 return Positioned(top: i * weekHourHeight - 7, left: 0, right: 0,
-                  child: Text("${(startHour + i).toString().padLeft(2, '0')}:00", style: TextStyle(color: Colors.grey.shade500, fontSize: 9, fontWeight: FontWeight.w600), textAlign: TextAlign.center));
+                  child: Text("${hour.toString().padLeft(2, '0')}:00", style: TextStyle(color: Colors.grey.shade500, fontSize: 9, fontWeight: FontWeight.w600), textAlign: TextAlign.center));
               }))),
             ...List.generate(7, (dayIndex) {
               final dayFullName = fullDayNames[dayIndex];
