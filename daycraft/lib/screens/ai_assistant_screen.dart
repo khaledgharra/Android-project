@@ -119,7 +119,7 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
         foregroundColor: Colors.black87,
       ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -193,7 +193,8 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
 
               // Loading animation
               if (isLoading)
-                const Expanded(
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
                   child: Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -255,10 +256,11 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: generatedTasks.length,
-                    itemBuilder: (context, index) {
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: generatedTasks.length,
+                  itemBuilder: (context, index) {
                       final isSelected = selectedIndices.contains(index);
                       return Container(
                         margin: const EdgeInsets.only(bottom: 10),
@@ -326,7 +328,6 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
                       );
                     },
                   ),
-                ),
                 const SizedBox(height: 16),
 
                 // Save button
