@@ -367,6 +367,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       appBar: AppBar(title: const Text("Weekly Schedule")),
 
       floatingActionButton: FloatingActionButton(
+        heroTag: "schedule_fab",
         onPressed: showAddDialog,
         child: const Icon(Icons.add),
       ),

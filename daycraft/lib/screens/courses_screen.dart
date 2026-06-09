@@ -63,6 +63,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text("Courses")),
       floatingActionButton: FloatingActionButton(
+        heroTag: "courses_fab",
         onPressed: () {
           clearControllers();
 

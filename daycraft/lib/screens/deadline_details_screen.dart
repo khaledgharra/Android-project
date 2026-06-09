@@ -117,6 +117,7 @@ class _DeadlineDetailsScreenState extends State<DeadlineDetailsScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: "deadline_details_fab",
         onPressed: () {
           showDialog(
             context: context,
