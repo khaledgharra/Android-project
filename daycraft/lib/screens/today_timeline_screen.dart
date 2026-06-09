@@ -104,8 +104,22 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
 
   void _filterEventsForSelectedDay() {
     final dayName = _getDayName(selectedDate.weekday);
+    final dateStr = "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}";
+
     final filtered = allSchedule.where((item) {
-      return item["day"] == dayName && item["start"] != null && item["end"] != null;
+      if (item["day"] != dayName || item["start"] == null || item["end"] == null) return false;
+
+      // Check if this date is in the exceptions list (skipped occurrence)
+      final exceptions = item["exceptions"];
+      if (exceptions is List && exceptions.contains(dateStr)) return false;
+
+      // If event has repeat == "once" and a specific date, only show on that date
+      final repeat = item["repeat"] ?? "weekly"; // default to weekly for backward compat
+      if (repeat == "once") {
+        final eventDate = item["date"];
+        if (eventDate != null && eventDate != dateStr) return false;
+      }
+      return true;
     }).toList();
     filtered.sort((a, b) {
       final (aH, aM) = _parseTime(a["start"]!);
@@ -309,21 +323,82 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
 
   // --- Delete event ---
   void _deleteEvent(Map<String, dynamic> event) async {
-    final confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: const Text("Delete Event"),
-      content: Text("Delete \"${event["title"] ?? event["name"] ?? ""}\"?"),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
-        ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-          onPressed: () => Navigator.pop(ctx, true), child: const Text("Delete")),
-      ],
-    ));
-    if (confirm != true || !mounted) return;
-    final docId = event["id"];
-    if (docId != null) await StorageService.deleteScheduleItem(docId);
-    setState(() { allSchedule.remove(event); });
-    _filterEventsForSelectedDay();
+    final repeat = event["repeat"] ?? "weekly";
+    final isCourse = event["type"] == "Course" || event["courseName"] != null;
+    final isRecurring = repeat == "weekly" || isCourse;
+    final dateStr = "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}";
+
+    if (isRecurring) {
+      // For course events: only "skip this occurrence"
+      // For other recurring events: "skip this occurrence" or "delete all"
+      final choice = await showModalBottomSheet<String>(
+        context: context,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+        builder: (ctx) => SafeArea(child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 16),
+            Text("Delete \"${event["title"] ?? event["name"] ?? ""}\"", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.event_busy_rounded, color: Colors.orange),
+              title: const Text("Skip this occurrence"),
+              subtitle: const Text("Remove only for this week"),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              onTap: () => Navigator.pop(ctx, "skip"),
+            ),
+            if (!isCourse) ...[
+              const SizedBox(height: 4),
+              ListTile(
+                leading: const Icon(Icons.delete_forever_rounded, color: Colors.red),
+                title: const Text("Delete all occurrences"),
+                subtitle: const Text("Remove from every week"),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                onTap: () => Navigator.pop(ctx, "all"),
+              ),
+            ],
+            const SizedBox(height: 8),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+          ]),
+        )),
+      );
+
+      if (choice == null || !mounted) return;
+
+      if (choice == "skip") {
+        // Add date to exceptions list
+        final exceptions = List<String>.from(event["exceptions"] ?? []);
+        exceptions.add(dateStr);
+        event["exceptions"] = exceptions;
+        final docId = event["id"];
+        if (docId != null) await StorageService.updateScheduleItem(docId, {"exceptions": exceptions});
+        setState(() {});
+        _filterEventsForSelectedDay();
+      } else if (choice == "all") {
+        final docId = event["id"];
+        if (docId != null) await StorageService.deleteScheduleItem(docId);
+        setState(() { allSchedule.remove(event); });
+        _filterEventsForSelectedDay();
+      }
+    } else {
+      // One-time event: simple delete
+      final confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("Delete Event"),
+        content: Text("Delete \"${event["title"] ?? event["name"] ?? ""}\"?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
+          ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            onPressed: () => Navigator.pop(ctx, true), child: const Text("Delete")),
+        ],
+      ));
+      if (confirm != true || !mounted) return;
+      final docId = event["id"];
+      if (docId != null) await StorageService.deleteScheduleItem(docId);
+      setState(() { allSchedule.remove(event); });
+      _filterEventsForSelectedDay();
+    }
   }
 
   // =================== ADD EVENT DIALOG ===================
@@ -332,6 +407,7 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
     DateTime eventDate = selectedDate;
     TimeOfDay? startTime;
     TimeOfDay? endTime;
+    String repeatMode = "once"; // "once" or "weekly"
 
     String _formatEventDate(DateTime date) {
       final dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -381,6 +457,24 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
                 ),
               ),
               const SizedBox(height: 12),
+              // Repeat toggle
+              GestureDetector(
+                onTap: () {
+                  setDialogState(() => repeatMode = repeatMode == "once" ? "weekly" : "once");
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: repeatMode == "weekly" ? Colors.deepPurple.shade200 : Colors.grey.shade200)),
+                  child: Row(children: [
+                    Icon(Icons.repeat_rounded, size: 16, color: repeatMode == "weekly" ? Colors.deepPurple : Colors.grey),
+                    const SizedBox(width: 10),
+                    Text(repeatMode == "weekly" ? "Repeats every week" : "Once (this date only)", style: TextStyle(fontWeight: FontWeight.w600, color: repeatMode == "weekly" ? Colors.deepPurple : Colors.grey.shade700)),
+                    const Spacer(),
+                    Icon(repeatMode == "weekly" ? Icons.check_circle : Icons.circle_outlined, size: 20, color: repeatMode == "weekly" ? Colors.deepPurple : Colors.grey.shade400),
+                  ]),
+                ),
+              ),
+              const SizedBox(height: 12),
               // Time picker — single tap chains start → end
               GestureDetector(
                 onTap: () async {
@@ -415,12 +509,15 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
               style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
               onPressed: () async {
                 if (titleController.text.trim().isEmpty || startTime == null || endTime == null) return;
-                final newItem = {
+                final dateStr = "${eventDate.year}-${eventDate.month.toString().padLeft(2, '0')}-${eventDate.day.toString().padLeft(2, '0')}";
+                final newItem = <String, dynamic>{
                   "title": titleController.text.trim(),
                   "type": "Activity",
                   "day": _getDayName(eventDate.weekday),
                   "start": startTime!.format(context),
                   "end": endTime!.format(context),
+                  "repeat": repeatMode,
+                  "date": dateStr,
                 };
                 final docId = await StorageService.addScheduleItem(newItem);
                 if (docId != null) newItem['id'] = docId;
@@ -822,8 +919,19 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
             ...List.generate(7, (dayIndex) {
               final dayFullName = fullDayNames[dayIndex];
               final date = weekDates[dayIndex];
+              final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
               final isToday = date.year == now.year && date.month == now.month && date.day == now.day;
-              final daySchedule = allSchedule.where((item) => item["day"] == dayFullName && item["start"] != null && item["end"] != null).toList();
+              final daySchedule = allSchedule.where((item) {
+                if (item["day"] != dayFullName || item["start"] == null || item["end"] == null) return false;
+                final exceptions = item["exceptions"];
+                if (exceptions is List && exceptions.contains(dateStr)) return false;
+                final repeat = item["repeat"] ?? "weekly";
+                if (repeat == "once") {
+                  final eventDate = item["date"];
+                  if (eventDate != null && eventDate != dateStr) return false;
+                }
+                return true;
+              }).toList();
 
               return Expanded(child: Container(
                 height: totalHours * weekHourHeight,
