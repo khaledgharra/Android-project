@@ -6,6 +6,10 @@ import 'api_keys.dart';
 class GeminiService {
   // API key loaded from local api_keys.dart (gitignored)
   static String get _apiKey => geminiApiKey;
+  static String? _lastError;
+  
+  /// Get the last error message (if any)
+  static String? get lastError => _lastError;
   static const String _baseUrl =
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
@@ -32,36 +36,47 @@ Example format: ["Task 1", "Task 2", "Task 3"]
 ''';
 
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl?key=$_apiKey'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'contents': [
-            {
-              'parts': [
-                {'text': prompt}
-              ]
-            }
-          ],
-          'generationConfig': {
-            'temperature': 0.7,
-            'maxOutputTokens': 500,
+      final requestBody = jsonEncode({
+        'contents': [
+          {
+            'parts': [
+              {'text': prompt}
+            ]
           }
-        }),
-      );
+        ],
+        'generationConfig': {
+          'temperature': 0.7,
+          'maxOutputTokens': 500,
+        }
+      });
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? '';
+      // Try up to 2 times (in case of rate limit with short retry)
+      for (int attempt = 0; attempt < 2; attempt++) {
+        final response = await http.post(
+          Uri.parse('$_baseUrl?key=$_apiKey'),
+          headers: {'Content-Type': 'application/json'},
+          body: requestBody,
+        );
 
-        // Parse the JSON array from the response
-        return _parseTaskList(text);
-      } else {
-        debugPrint('Gemini API error: ${response.statusCode} - ${response.body}');
-        return _getFallbackTasks(goal);
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? '';
+          return _parseTaskList(text);
+        } else if (response.statusCode == 429 && attempt == 0) {
+          // Rate limited — wait and retry once
+          debugPrint('Gemini API rate limited, retrying in 5 seconds...');
+          await Future.delayed(const Duration(seconds: 5));
+          continue;
+        } else {
+          debugPrint('Gemini API error: ${response.statusCode} - ${response.body}');
+          _lastError = 'API error ${response.statusCode}: Rate limit or quota exceeded';
+          return _getFallbackTasks(goal);
+        }
       }
+      return _getFallbackTasks(goal);
     } catch (e) {
       debugPrint('Gemini API exception: $e');
+      _lastError = 'Network error: $e';
       return _getFallbackTasks(goal);
     }
   }

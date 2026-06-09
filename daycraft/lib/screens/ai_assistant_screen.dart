@@ -61,6 +61,18 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
       isLoading = false;
       hasGenerated = true;
     });
+
+    // Show warning if API failed and fallback was used
+    final error = GeminiService.lastError;
+    if (error != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("⚠️ AI unavailable: $error\nShowing suggested tasks instead."),
+          backgroundColor: Colors.orange.shade700,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
   }
 
   Future<void> _saveToDeadline() async {
