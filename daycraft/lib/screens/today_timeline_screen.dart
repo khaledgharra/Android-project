@@ -12,6 +12,8 @@ class TodayTimelineScreen extends StatefulWidget {
 class TodayTimelineScreenState extends State<TodayTimelineScreen> {
   List<Map<String, dynamic>> allSchedule = [];
   List<Map<String, dynamic>> dayEvents = [];
+  List<Map<String, dynamic>> allDeadlines = [];
+  List<Map<String, dynamic>> dayDeadlines = [];
   bool isLoading = true;
   Timer? _timeUpdateTimer;
 
@@ -79,12 +81,25 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
 
   Future<void> loadTodayEvents() async {
     final loaded = await StorageService.loadSchedule();
+    final deadlines = await StorageService.loadDeadlines();
     if (!mounted) return;
-    setState(() { allSchedule = loaded; });
+    setState(() { allSchedule = loaded; allDeadlines = deadlines; });
     _filterEventsForSelectedDay();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_isToday) _scrollToCurrentTime();
     });
+  }
+
+  DateTime? _parseDeadlineDate(String? dateStr) {
+    if (dateStr == null || dateStr.isEmpty) return null;
+    try { return DateTime.parse(dateStr); } catch (_) {}
+    try {
+      final parts = dateStr.split("/");
+      if (parts.length == 3) {
+        return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+      }
+    } catch (_) {}
+    return null;
   }
 
   void _filterEventsForSelectedDay() {
@@ -97,7 +112,15 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
       final (bH, bM) = _parseTime(b["start"]!);
       return (aH * 60 + aM).compareTo(bH * 60 + bM);
     });
-    setState(() { dayEvents = filtered; isLoading = false; });
+
+    // Filter deadlines for the selected date
+    final filteredDeadlines = allDeadlines.where((d) {
+      final date = _parseDeadlineDate(d["date"]?.toString());
+      if (date == null) return false;
+      return date.year == selectedDate.year && date.month == selectedDate.month && date.day == selectedDate.day;
+    }).toList();
+
+    setState(() { dayEvents = filtered; dayDeadlines = filteredDeadlines; isLoading = false; });
   }
 
   void _goToPreviousDay() {
@@ -446,17 +469,162 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
               TextButton.icon(onPressed: _goToToday, icon: const Icon(Icons.today, size: 14), label: const Text("Today", style: TextStyle(fontSize: 12)),
                 style: TextButton.styleFrom(foregroundColor: Colors.deepPurple, padding: EdgeInsets.zero, minimumSize: const Size(0, 30))),
             const SizedBox(height: 4),
+            // Deadline banners at top (like Google Calendar all-day events)
+            if (viewMode == "Day" && dayDeadlines.isNotEmpty)
+              _buildDeadlineBanners(),
             Expanded(
               child: isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : viewMode == "Day"
-                      ? (dayEvents.isEmpty ? _buildEmptyState() : _buildDayTimeline())
+                      ? (dayEvents.isEmpty && dayDeadlines.isEmpty ? _buildEmptyState() : _buildDayTimeline())
                       : _buildWeekView(),
             ),
           ],
         ),
       ),
     );
+  }
+
+  // =================== DEADLINE BANNERS ===================
+  Widget _buildDeadlineBanners() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        children: dayDeadlines.map((deadline) {
+          final title = deadline["title"] ?? "Untitled";
+          final type = deadline["type"] ?? "";
+          final color = type == "Exam" ? Colors.red : type == "Quiz" ? Colors.blue : Colors.orange;
+          return GestureDetector(
+            onTap: () => _showDeadlineEditSheet(deadline),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border(left: BorderSide(color: color, width: 3)),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.assignment_late_rounded, size: 14, color: color),
+                const SizedBox(width: 6),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 180),
+                  child: Text(title, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color), maxLines: 1, overflow: TextOverflow.ellipsis),
+                ),
+              ]),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  // =================== DEADLINE EDIT BOTTOM SHEET ===================
+  void _showDeadlineEditSheet(Map<String, dynamic> deadline) {
+    final title = deadline["title"] ?? "Untitled";
+    final date = deadline["date"] ?? "";
+    final course = deadline["course"] ?? "";
+    final type = deadline["type"] ?? "";
+    final typeColor = type == "Exam" ? Colors.red : type == "Quiz" ? Colors.blue : Colors.orange;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 16),
+            Row(children: [
+              Icon(Icons.assignment_late_rounded, size: 18, color: typeColor),
+              const SizedBox(width: 10),
+              Expanded(child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+            ]),
+            const SizedBox(height: 4),
+            Align(alignment: Alignment.centerLeft, child: Padding(
+              padding: const EdgeInsets.only(left: 28),
+              child: Text("$date${course.isNotEmpty ? '  •  $course' : ''}${type.isNotEmpty ? '  •  $type' : ''}", style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+            )),
+            const SizedBox(height: 20),
+            _editOption(Icons.edit_rounded, "Edit name", () {
+              Navigator.pop(ctx);
+              _editDeadlineName(deadline);
+            }),
+            _editOption(Icons.event_rounded, "Change date", () {
+              Navigator.pop(ctx);
+              _editDeadlineDate(deadline);
+            }),
+            _editOption(Icons.delete_rounded, "Delete", () {
+              Navigator.pop(ctx);
+              _deleteDeadline(deadline);
+            }, color: Colors.red),
+            const SizedBox(height: 8),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  void _editDeadlineName(Map<String, dynamic> deadline) {
+    final controller = TextEditingController(text: deadline["title"] ?? "");
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Text("Edit Deadline Name"),
+      content: TextField(controller: controller, autofocus: true,
+        decoration: InputDecoration(filled: true, fillColor: Colors.grey.shade50, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none))),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+          onPressed: () async {
+            if (controller.text.trim().isEmpty) return;
+            deadline["title"] = controller.text.trim();
+            final docId = deadline["id"];
+            if (docId != null) await StorageService.updateDeadline(docId, {"title": deadline["title"]});
+            Navigator.pop(ctx);
+            setState(() {});
+          },
+          child: const Text("Save"),
+        ),
+      ],
+    ));
+  }
+
+  void _editDeadlineDate(Map<String, dynamic> deadline) async {
+    final currentDate = _parseDeadlineDate(deadline["date"]?.toString()) ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context, initialDate: currentDate,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime(2030),
+    );
+    if (picked == null || !mounted) return;
+    final newDate = "${picked.day}/${picked.month}/${picked.year}";
+    deadline["date"] = newDate;
+    final docId = deadline["id"];
+    if (docId != null) await StorageService.updateDeadline(docId, {"date": newDate});
+    setState(() {});
+    _filterEventsForSelectedDay();
+  }
+
+  void _deleteDeadline(Map<String, dynamic> deadline) async {
+    final confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Text("Delete Deadline"),
+      content: Text("Delete \"${deadline["title"] ?? ""}\"?"),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
+        ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+          onPressed: () => Navigator.pop(ctx, true), child: const Text("Delete")),
+      ],
+    ));
+    if (confirm != true || !mounted) return;
+    final docId = deadline["id"];
+    if (docId != null) await StorageService.deleteDeadline(docId);
+    setState(() { allDeadlines.remove(deadline); });
+    _filterEventsForSelectedDay();
   }
 
   Widget _buildEmptyState() {
