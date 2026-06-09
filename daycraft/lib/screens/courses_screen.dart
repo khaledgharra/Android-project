@@ -6,10 +6,10 @@ class CoursesScreen extends StatefulWidget {
   const CoursesScreen({super.key});
 
   @override
-  State<CoursesScreen> createState() => _CoursesScreenState();
+  State<CoursesScreen> createState() => CoursesScreenState();
 }
 
-class _CoursesScreenState extends State<CoursesScreen> {
+class CoursesScreenState extends State<CoursesScreen> {
   final deadlineTitleController = TextEditingController();
 
   DateTime? selectedDeadlineDate;

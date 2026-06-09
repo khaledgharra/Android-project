@@ -6,10 +6,10 @@ class DeadlinesScreen extends StatefulWidget {
   const DeadlinesScreen({super.key});
 
   @override
-  State<DeadlinesScreen> createState() => _DeadlinesScreenState();
+  State<DeadlinesScreen> createState() => DeadlinesScreenState();
 }
 
-class _DeadlinesScreenState extends State<DeadlinesScreen> {
+class DeadlinesScreenState extends State<DeadlinesScreen> {
   List<String> availableCourses = ["None"];
   final estimatedHoursController = TextEditingController();
   String sortOption = "Date";

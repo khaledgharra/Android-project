@@ -14,7 +14,10 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+  final GlobalKey<DashboardTabState> _dashboardKey = GlobalKey<DashboardTabState>();
   final GlobalKey<TodayTimelineScreenState> _calendarKey = GlobalKey<TodayTimelineScreenState>();
+  final GlobalKey<CoursesScreenState> _coursesKey = GlobalKey<CoursesScreenState>();
+  final GlobalKey<DeadlinesScreenState> _deadlinesKey = GlobalKey<DeadlinesScreenState>();
 
   late final List<Widget> _screens;
 
@@ -22,10 +25,10 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _screens = [
-      const _DashboardTab(),
+      DashboardTab(key: _dashboardKey),
       TodayTimelineScreen(key: _calendarKey),
-      const CoursesScreen(),
-      const DeadlinesScreen(),
+      CoursesScreen(key: _coursesKey),
+      DeadlinesScreen(key: _deadlinesKey),
     ];
   }
 
@@ -64,7 +67,22 @@ class _HomeScreenState extends State<HomeScreen> {
     return GestureDetector(
       onTap: () {
         setState(() => _currentIndex = index);
-        if (index == 1) _calendarKey.currentState?.loadTodayEvents();
+        // Refresh the target tab's data on switch
+        switch (index) {
+          case 0:
+            _dashboardKey.currentState?.loadTodayTasks();
+            _dashboardKey.currentState?.loadUpcomingDeadlines();
+            break;
+          case 1:
+            _calendarKey.currentState?.loadTodayEvents();
+            break;
+          case 2:
+            _coursesKey.currentState?.loadCourses();
+            break;
+          case 3:
+            _deadlinesKey.currentState?.loadDeadlines();
+            break;
+        }
       },
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
@@ -90,14 +108,14 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 /// The Dashboard / Home tab with greetings, urgent deadlines, and today's quick summary
-class _DashboardTab extends StatefulWidget {
-  const _DashboardTab();
+class DashboardTab extends StatefulWidget {
+  const DashboardTab({super.key});
 
   @override
-  State<_DashboardTab> createState() => _DashboardTabState();
+  State<DashboardTab> createState() => DashboardTabState();
 }
 
-class _DashboardTabState extends State<_DashboardTab> {
+class DashboardTabState extends State<DashboardTab> {
   List<Map<String, dynamic>> todayTasks = [];
   List<Map<String, dynamic>> upcomingDeadlines = [];
 
