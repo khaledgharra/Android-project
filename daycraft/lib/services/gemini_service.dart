@@ -1,16 +1,22 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 class GeminiService {
-  // API key - in production, this should be stored securely
-  static const String _apiKey = 'AIzaSyDummyKeyReplaceMeWithReal';
+  // API key loaded from .env file
+  static String get _apiKey => dotenv.env['GEMINI_API_KEY'] ?? '';
   static const String _baseUrl =
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
   /// Generate study subtasks from a complex goal/exam description
   /// Returns a list of 3-5 actionable study tasks
   static Future<List<String>> generateStudyPlan(String goal) async {
+    if (_apiKey.isEmpty) {
+      debugPrint('Gemini API key not configured in .env file');
+      return _getFallbackTasks(goal);
+    }
+
     final prompt = '''
 You are a study planning assistant. A student needs to prepare for the following academic goal:
 
@@ -124,5 +130,5 @@ Example format: ["Task 1", "Task 2", "Task 3"]
   }
 
   /// Check if the API key has been configured
-  static bool get isConfigured => _apiKey != 'AIzaSyDummyKeyReplaceMeWithReal';
+  static bool get isConfigured => _apiKey.isNotEmpty;
 }
