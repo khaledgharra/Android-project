@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/storage_service.dart';
-import 'schedule_screen.dart';
 
 class TodayTimelineScreen extends StatefulWidget {
   const TodayTimelineScreen({super.key});
@@ -259,6 +258,120 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
     return "${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}";
   }
 
+  // =================== ADD EVENT DIALOG ===================
+  void _showAddEventDialog() {
+    final titleController = TextEditingController();
+    String selectedDay = _getDayName(selectedDate.weekday);
+    TimeOfDay? startTime;
+    TimeOfDay? endTime;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text("Add Event"),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(
+                controller: titleController,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: "Event name...",
+                  filled: true, fillColor: Colors.grey.shade50,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Day picker
+              GestureDetector(
+                onTap: () async {
+                  final picked = await showModalBottomSheet<String>(
+                    context: context,
+                    builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      const Padding(padding: EdgeInsets.all(12), child: Text("Select Day", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                      ...fullDayNames.map((d) => ListTile(title: Text(d), onTap: () => Navigator.pop(ctx, d))),
+                    ])),
+                  );
+                  if (picked != null) setDialogState(() => selectedDay = picked);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+                  child: Row(children: [
+                    const Icon(Icons.calendar_today, size: 16, color: Colors.deepPurple),
+                    const SizedBox(width: 10),
+                    Text(selectedDay, style: const TextStyle(fontWeight: FontWeight.w600)),
+                    const Spacer(),
+                    const Icon(Icons.arrow_drop_down, color: Colors.grey),
+                  ]),
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Time pickers
+              Row(children: [
+                Expanded(child: GestureDetector(
+                  onTap: () async {
+                    final picked = await showTimePicker(context: context, initialTime: startTime ?? const TimeOfDay(hour: 8, minute: 0), initialEntryMode: TimePickerEntryMode.input);
+                    if (picked != null) setDialogState(() => startTime = picked);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: startTime != null ? Colors.deepPurple.shade200 : Colors.grey.shade200)),
+                    child: Row(children: [
+                      Icon(Icons.play_arrow_rounded, size: 16, color: startTime != null ? Colors.deepPurple : Colors.grey),
+                      const SizedBox(width: 6),
+                      Text(startTime?.format(context) ?? "Start", style: TextStyle(fontWeight: FontWeight.w600, color: startTime != null ? Colors.black87 : Colors.grey)),
+                    ]),
+                  ),
+                )),
+                const SizedBox(width: 10),
+                Expanded(child: GestureDetector(
+                  onTap: () async {
+                    final picked = await showTimePicker(context: context, initialTime: endTime ?? startTime ?? const TimeOfDay(hour: 9, minute: 0), initialEntryMode: TimePickerEntryMode.input);
+                    if (picked != null) setDialogState(() => endTime = picked);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: endTime != null ? Colors.deepPurple.shade200 : Colors.grey.shade200)),
+                    child: Row(children: [
+                      Icon(Icons.stop_rounded, size: 16, color: endTime != null ? Colors.deepPurple : Colors.grey),
+                      const SizedBox(width: 6),
+                      Text(endTime?.format(context) ?? "End", style: TextStyle(fontWeight: FontWeight.w600, color: endTime != null ? Colors.black87 : Colors.grey)),
+                    ]),
+                  ),
+                )),
+              ]),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              onPressed: () async {
+                if (titleController.text.trim().isEmpty || startTime == null || endTime == null) return;
+                final newItem = {
+                  "title": titleController.text.trim(),
+                  "type": "Activity",
+                  "day": selectedDay,
+                  "start": startTime!.format(context),
+                  "end": endTime!.format(context),
+                };
+                final docId = await StorageService.addScheduleItem(newItem);
+                if (docId != null) newItem['id'] = docId;
+                if (!mounted) return;
+                Navigator.pop(context);
+                setState(() { allSchedule.add(newItem); });
+                _filterEventsForSelectedDay();
+              },
+              child: const Text("Add"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final dayName = _getDayName(selectedDate.weekday);
@@ -269,10 +382,7 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
       floatingActionButton: FloatingActionButton(
         heroTag: "calendar_fab",
         backgroundColor: Colors.deepPurple,
-        onPressed: () async {
-          await Navigator.push(context, MaterialPageRoute(builder: (_) => const ScheduleScreen()));
-          loadTodayEvents(); // Refresh after adding
-        },
+        onPressed: _showAddEventDialog,
         child: const Icon(Icons.add, color: Colors.white),
       ),
       body: SafeArea(
