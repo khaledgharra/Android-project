@@ -341,7 +341,8 @@ class _CoursesScreenState extends State<CoursesScreen> {
                       onPressed: () async {
                         final picked = await showTimePicker(
                           context: context,
-                          initialTime: TimeOfDay.now(),
+                          initialTime: lectureStart ?? const TimeOfDay(hour: 8, minute: 0),
+                          initialEntryMode: TimePickerEntryMode.input,
                         );
 
                         if (picked != null) {
@@ -364,7 +365,8 @@ class _CoursesScreenState extends State<CoursesScreen> {
                       onPressed: () async {
                         final picked = await showTimePicker(
                           context: context,
-                          initialTime: TimeOfDay.now(),
+                          initialTime: lectureEnd ?? lectureStart ?? const TimeOfDay(hour: 8, minute: 0),
+                          initialEntryMode: TimePickerEntryMode.input,
                         );
 
                         if (picked != null) {
@@ -411,7 +413,8 @@ class _CoursesScreenState extends State<CoursesScreen> {
                       onPressed: () async {
                         final picked = await showTimePicker(
                           context: context,
-                          initialTime: TimeOfDay.now(),
+                          initialTime: tutorialStart ?? const TimeOfDay(hour: 8, minute: 0),
+                          initialEntryMode: TimePickerEntryMode.input,
                         );
 
                         if (picked != null) {
@@ -434,7 +437,8 @@ class _CoursesScreenState extends State<CoursesScreen> {
                       onPressed: () async {
                         final picked = await showTimePicker(
                           context: context,
-                          initialTime: TimeOfDay.now(),
+                          initialTime: tutorialEnd ?? tutorialStart ?? const TimeOfDay(hour: 8, minute: 0),
+                          initialEntryMode: TimePickerEntryMode.input,
                         );
 
                         if (picked != null) {

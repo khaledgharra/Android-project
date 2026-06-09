@@ -213,7 +213,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                   onTap: () async {
                                     final picked = await showTimePicker(
                                       context: context,
-                                      initialTime: TimeOfDay.now(),
+                                      initialTime: startTime ?? const TimeOfDay(hour: 8, minute: 0),
+                                      initialEntryMode: TimePickerEntryMode.input,
                                     );
 
                                     if (picked != null) {
@@ -224,17 +225,30 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                   },
 
                                   child: Container(
-                                    padding: const EdgeInsets.all(14),
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
 
                                     decoration: BoxDecoration(
                                       color: Colors.white,
                                       borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: startTime != null ? Colors.deepPurple.shade200 : Colors.grey.shade300,
+                                      ),
                                     ),
 
-                                    child: Text(
-                                      startTime == null
-                                          ? "Start Time"
-                                          : startTime!.format(context),
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.access_time, size: 18, color: startTime != null ? Colors.deepPurple : Colors.grey),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          startTime == null
+                                              ? "Start"
+                                              : startTime!.format(context),
+                                          style: TextStyle(
+                                            fontWeight: startTime != null ? FontWeight.w600 : FontWeight.normal,
+                                            color: startTime != null ? Colors.black87 : Colors.grey,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
@@ -247,7 +261,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                   onTap: () async {
                                     final picked = await showTimePicker(
                                       context: context,
-                                      initialTime: TimeOfDay.now(),
+                                      initialTime: endTime ?? startTime ?? const TimeOfDay(hour: 9, minute: 0),
+                                      initialEntryMode: TimePickerEntryMode.input,
                                     );
 
                                     if (picked != null) {
@@ -258,17 +273,30 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                   },
 
                                   child: Container(
-                                    padding: const EdgeInsets.all(14),
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
 
                                     decoration: BoxDecoration(
                                       color: Colors.white,
                                       borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: endTime != null ? Colors.deepPurple.shade200 : Colors.grey.shade300,
+                                      ),
                                     ),
 
-                                    child: Text(
-                                      endTime == null
-                                          ? "End Time"
-                                          : endTime!.format(context),
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.access_time_filled, size: 18, color: endTime != null ? Colors.deepPurple : Colors.grey),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          endTime == null
+                                              ? "End"
+                                              : endTime!.format(context),
+                                          style: TextStyle(
+                                            fontWeight: endTime != null ? FontWeight.w600 : FontWeight.normal,
+                                            color: endTime != null ? Colors.black87 : Colors.grey,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
