@@ -218,9 +218,9 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
   void _editEventTime(Map<String, dynamic> event) async {
     final (sH, sM) = _parseTime(event["start"]!);
     final (eH, eM) = _parseTime(event["end"]!);
-    final pickedStart = await showTimePicker(context: context, initialTime: TimeOfDay(hour: sH, minute: sM), initialEntryMode: TimePickerEntryMode.input, helpText: "START TIME");
+    final pickedStart = await showTimePicker(context: context, initialTime: TimeOfDay(hour: sH, minute: sM), initialEntryMode: TimePickerEntryMode.inputOnly, helpText: "START TIME");
     if (pickedStart == null || !mounted) return;
-    final pickedEnd = await showTimePicker(context: context, initialTime: TimeOfDay(hour: eH, minute: eM), initialEntryMode: TimePickerEntryMode.input, helpText: "END TIME");
+    final pickedEnd = await showTimePicker(context: context, initialTime: TimeOfDay(hour: eH, minute: eM), initialEntryMode: TimePickerEntryMode.inputOnly, helpText: "END TIME");
     if (pickedEnd == null || !mounted) return;
     event["start"] = pickedStart.format(context);
     event["end"] = pickedEnd.format(context);
@@ -328,10 +328,10 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
               // Time picker — single tap chains start → end
               GestureDetector(
                 onTap: () async {
-                  final pickedStart = await showTimePicker(context: context, initialTime: startTime ?? const TimeOfDay(hour: 8, minute: 0), initialEntryMode: TimePickerEntryMode.input, helpText: "START TIME");
+                  final pickedStart = await showTimePicker(context: context, initialTime: startTime ?? const TimeOfDay(hour: 8, minute: 0), initialEntryMode: TimePickerEntryMode.inputOnly, helpText: "START TIME");
                   if (pickedStart == null) return;
                   setDialogState(() => startTime = pickedStart);
-                  final pickedEnd = await showTimePicker(context: context, initialTime: endTime ?? pickedStart, initialEntryMode: TimePickerEntryMode.input, helpText: "END TIME");
+                  final pickedEnd = await showTimePicker(context: context, initialTime: endTime ?? pickedStart, initialEntryMode: TimePickerEntryMode.inputOnly, helpText: "END TIME");
                   if (pickedEnd != null) setDialogState(() => endTime = pickedEnd);
                 },
                 child: Container(

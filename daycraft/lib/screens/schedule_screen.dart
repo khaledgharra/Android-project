@@ -212,7 +212,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                               final pickedStart = await showTimePicker(
                                 context: context,
                                 initialTime: startTime ?? const TimeOfDay(hour: 8, minute: 0),
-                                initialEntryMode: TimePickerEntryMode.input,
+                                initialEntryMode: TimePickerEntryMode.inputOnly,
                                 helpText: "START TIME",
                               );
                               if (pickedStart == null) return;
@@ -220,7 +220,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                               final pickedEnd = await showTimePicker(
                                 context: context,
                                 initialTime: endTime ?? pickedStart,
-                                initialEntryMode: TimePickerEntryMode.input,
+                                initialEntryMode: TimePickerEntryMode.inputOnly,
                                 helpText: "END TIME",
                               );
                               if (pickedEnd != null) setDialogState(() => endTime = pickedEnd);

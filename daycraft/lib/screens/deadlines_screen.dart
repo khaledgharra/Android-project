@@ -180,7 +180,7 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
                         setDialogState(() => selectedDate = pickedDate);
                         final pickedTime = await showTimePicker(
                           context: context, initialTime: selectedTime ?? const TimeOfDay(hour: 23, minute: 59),
-                          initialEntryMode: TimePickerEntryMode.input, helpText: "DUE TIME",
+                          initialEntryMode: TimePickerEntryMode.inputOnly, helpText: "DUE TIME",
                         );
                         if (pickedTime != null) setDialogState(() => selectedTime = pickedTime);
                       },
@@ -531,7 +531,7 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
                         setDialogState(() => selectedDate = pickedDate);
                         final pickedTime = await showTimePicker(
                           context: context, initialTime: selectedTime ?? const TimeOfDay(hour: 23, minute: 59),
-                          initialEntryMode: TimePickerEntryMode.input, helpText: "DUE TIME",
+                          initialEntryMode: TimePickerEntryMode.inputOnly, helpText: "DUE TIME",
                         );
                         if (pickedTime != null) setDialogState(() => selectedTime = pickedTime);
                       },

@@ -348,10 +348,10 @@ class _CoursesScreenState extends State<CoursesScreen> {
                                 ? "${lectureStart!.format(context)} → ${lectureEnd!.format(context)}"
                                 : "Set time...",
                             onTap: () async {
-                              final pickedStart = await showTimePicker(context: context, initialTime: lectureStart ?? const TimeOfDay(hour: 8, minute: 0), initialEntryMode: TimePickerEntryMode.input, helpText: "LECTURE START");
+                              final pickedStart = await showTimePicker(context: context, initialTime: lectureStart ?? const TimeOfDay(hour: 8, minute: 0), initialEntryMode: TimePickerEntryMode.inputOnly, helpText: "LECTURE START");
                               if (pickedStart == null) return;
                               setDialogState(() => lectureStart = pickedStart);
-                              final pickedEnd = await showTimePicker(context: context, initialTime: lectureEnd ?? pickedStart, initialEntryMode: TimePickerEntryMode.input, helpText: "LECTURE END");
+                              final pickedEnd = await showTimePicker(context: context, initialTime: lectureEnd ?? pickedStart, initialEntryMode: TimePickerEntryMode.inputOnly, helpText: "LECTURE END");
                               if (pickedEnd != null) setDialogState(() => lectureEnd = pickedEnd);
                             },
                           ),
@@ -394,10 +394,10 @@ class _CoursesScreenState extends State<CoursesScreen> {
                                 ? "${tutorialStart!.format(context)} → ${tutorialEnd!.format(context)}"
                                 : "Set time...",
                             onTap: () async {
-                              final pickedStart = await showTimePicker(context: context, initialTime: tutorialStart ?? const TimeOfDay(hour: 8, minute: 0), initialEntryMode: TimePickerEntryMode.input, helpText: "TUTORIAL START");
+                              final pickedStart = await showTimePicker(context: context, initialTime: tutorialStart ?? const TimeOfDay(hour: 8, minute: 0), initialEntryMode: TimePickerEntryMode.inputOnly, helpText: "TUTORIAL START");
                               if (pickedStart == null) return;
                               setDialogState(() => tutorialStart = pickedStart);
-                              final pickedEnd = await showTimePicker(context: context, initialTime: tutorialEnd ?? pickedStart, initialEntryMode: TimePickerEntryMode.input, helpText: "TUTORIAL END");
+                              final pickedEnd = await showTimePicker(context: context, initialTime: tutorialEnd ?? pickedStart, initialEntryMode: TimePickerEntryMode.inputOnly, helpText: "TUTORIAL END");
                               if (pickedEnd != null) setDialogState(() => tutorialEnd = pickedEnd);
                             },
                           ),
