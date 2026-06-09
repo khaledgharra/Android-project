@@ -128,6 +128,153 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
     }
   }
 
+  // =================== EVENT EDIT BOTTOM SHEET ===================
+  void _showEventEditSheet(Map<String, dynamic> event) {
+    final eventColor = Color(event["color"] ?? Colors.deepPurple.toARGB32());
+    final eventTitle = event["title"] ?? event["name"] ?? "Untitled";
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            // Handle
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 16),
+            // Event header
+            Row(children: [
+              Container(width: 14, height: 14, decoration: BoxDecoration(color: eventColor, shape: BoxShape.circle)),
+              const SizedBox(width: 12),
+              Expanded(child: Text(eventTitle, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+            ]),
+            const SizedBox(height: 4),
+            Align(alignment: Alignment.centerLeft, child: Padding(
+              padding: const EdgeInsets.only(left: 26),
+              child: Text("${event["start"]} — ${event["end"]}  •  ${event["day"] ?? ""}", style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+            )),
+            const SizedBox(height: 20),
+            // Actions
+            _editOption(Icons.edit_rounded, "Edit name", () async {
+              Navigator.pop(ctx);
+              _editEventName(event);
+            }),
+            _editOption(Icons.schedule_rounded, "Change time", () async {
+              Navigator.pop(ctx);
+              _editEventTime(event);
+            }),
+            _editOption(Icons.palette_rounded, "Change color", () async {
+              Navigator.pop(ctx);
+              _editEventColor(event);
+            }),
+            _editOption(Icons.delete_rounded, "Delete", () async {
+              Navigator.pop(ctx);
+              _deleteEvent(event);
+            }, color: Colors.red),
+            const SizedBox(height: 8),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _editOption(IconData icon, String label, VoidCallback onTap, {Color? color}) {
+    return ListTile(
+      leading: Icon(icon, color: color ?? Colors.grey.shade700, size: 22),
+      title: Text(label, style: TextStyle(fontWeight: FontWeight.w500, color: color ?? Colors.black87)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      onTap: onTap,
+    );
+  }
+
+  // --- Edit name ---
+  void _editEventName(Map<String, dynamic> event) {
+    final controller = TextEditingController(text: event["title"] ?? event["name"] ?? "");
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Text("Edit Name"),
+      content: TextField(controller: controller, autofocus: true,
+        decoration: InputDecoration(filled: true, fillColor: Colors.grey.shade50, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none))),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+          onPressed: () async {
+            if (controller.text.trim().isEmpty) return;
+            event["title"] = controller.text.trim();
+            final docId = event["id"];
+            if (docId != null) await StorageService.updateScheduleItem(docId, {"title": event["title"]});
+            Navigator.pop(ctx);
+            setState(() {});
+          },
+          child: const Text("Save"),
+        ),
+      ],
+    ));
+  }
+
+  // --- Edit time ---
+  void _editEventTime(Map<String, dynamic> event) async {
+    final (sH, sM) = _parseTime(event["start"]!);
+    final (eH, eM) = _parseTime(event["end"]!);
+    final pickedStart = await showTimePicker(context: context, initialTime: TimeOfDay(hour: sH, minute: sM), initialEntryMode: TimePickerEntryMode.input, helpText: "START TIME");
+    if (pickedStart == null || !mounted) return;
+    final pickedEnd = await showTimePicker(context: context, initialTime: TimeOfDay(hour: eH, minute: eM), initialEntryMode: TimePickerEntryMode.input, helpText: "END TIME");
+    if (pickedEnd == null || !mounted) return;
+    event["start"] = pickedStart.format(context);
+    event["end"] = pickedEnd.format(context);
+    final docId = event["id"];
+    if (docId != null) await StorageService.updateScheduleItem(docId, {"start": event["start"], "end": event["end"]});
+    setState(() {});
+    _filterEventsForSelectedDay();
+  }
+
+  // --- Edit color ---
+  void _editEventColor(Map<String, dynamic> event) {
+    final colors = [Colors.deepPurple, Colors.blue, Colors.teal, Colors.green, Colors.orange, Colors.red, Colors.pink, Colors.indigo];
+    showModalBottomSheet(context: context, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => SafeArea(child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text("Choose Color", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 20),
+          Wrap(spacing: 16, runSpacing: 16, children: colors.map((c) => GestureDetector(
+            onTap: () async {
+              event["color"] = c.toARGB32();
+              final docId = event["id"];
+              if (docId != null) await StorageService.updateScheduleItem(docId, {"color": c.toARGB32()});
+              Navigator.pop(ctx);
+              setState(() {});
+            },
+            child: Container(width: 44, height: 44, decoration: BoxDecoration(color: c, shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 3),
+              boxShadow: [BoxShadow(color: c.withValues(alpha: 0.4), blurRadius: 6, offset: const Offset(0, 2))])),
+          )).toList()),
+        ]),
+      )),
+    );
+  }
+
+  // --- Delete event ---
+  void _deleteEvent(Map<String, dynamic> event) async {
+    final confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Text("Delete Event"),
+      content: Text("Delete \"${event["title"] ?? event["name"] ?? ""}\"?"),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
+        ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+          onPressed: () => Navigator.pop(ctx, true), child: const Text("Delete")),
+      ],
+    ));
+    if (confirm != true || !mounted) return;
+    final docId = event["id"];
+    if (docId != null) await StorageService.deleteScheduleItem(docId);
+    setState(() { allSchedule.remove(event); });
+    _filterEventsForSelectedDay();
+  }
+
   // =================== ADD EVENT DIALOG ===================
   void _showAddEventDialog() {
     final titleController = TextEditingController();
@@ -352,14 +499,18 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
             final top = sMins * (hourHeight / 60);
             final h = dur * (hourHeight / 60);
             final color = Color(event["color"] ?? Colors.deepPurple.toARGB32());
-            return Positioned(top: top, left: 4, right: 4, child: Container(
-              height: h < 32 ? 32 : h, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12),
-                boxShadow: [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 6, offset: const Offset(0, 2))]),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-                Text(event["title"] ?? event["name"] ?? "", style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
-                if (h > 45) Text("${event["start"]} — ${event["end"]}", style: const TextStyle(color: Colors.white70, fontSize: 10)),
-              ])));
+            return Positioned(top: top, left: 4, right: 4, child: GestureDetector(
+              onTap: () => _showEventEditSheet(event),
+              child: Container(
+                height: h < 32 ? 32 : h, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12),
+                  boxShadow: [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 6, offset: const Offset(0, 2))]),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Text(event["title"] ?? event["name"] ?? "", style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  if (h > 45) Text("${event["start"]} — ${event["end"]}", style: const TextStyle(color: Colors.white70, fontSize: 10)),
+                ]),
+              ),
+            ));
           }),
           // Red current time line (only today)
           if (_isToday && currentMinutes >= 0 && currentMinutes <= totalHours * 60)
