@@ -139,6 +139,34 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) { _scrollToCurrentTime(); });
   }
 
+  // =================== WEEK NAVIGATION ===================
+  DateTime get _weekStart {
+    // Week starts on Sunday
+    final weekday = selectedDate.weekday % 7; // Sunday = 0
+    return selectedDate.subtract(Duration(days: weekday));
+  }
+
+  void _goToPreviousWeek() {
+    setState(() { selectedDate = selectedDate.subtract(const Duration(days: 7)); });
+  }
+
+  void _goToNextWeek() {
+    setState(() { selectedDate = selectedDate.add(const Duration(days: 7)); });
+  }
+
+  String _getWeekRangeLabel() {
+    final start = _weekStart;
+    final end = start.add(const Duration(days: 6));
+    final months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    if (start.month == end.month) {
+      return "${start.day} – ${end.day} ${months[start.month - 1]} ${start.year}";
+    } else if (start.year == end.year) {
+      return "${start.day} ${months[start.month - 1]} – ${end.day} ${months[end.month - 1]}";
+    } else {
+      return "${start.day} ${months[start.month - 1]} ${start.year} – ${end.day} ${months[end.month - 1]} ${end.year}";
+    }
+  }
+
   void _scrollToCurrentTime() {
     final now = DateTime.now();
     final currentMinutes = (now.hour - startHour) * 60 + now.minute;
@@ -460,7 +488,9 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
                     ),
                     IconButton(onPressed: _goToNextDay, icon: const Icon(Icons.chevron_right_rounded), iconSize: 24, color: Colors.grey.shade700),
                   ] else ...[
-                    const Expanded(child: Center(child: Text("Week View", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.deepPurple)))),
+                    IconButton(onPressed: _goToPreviousWeek, icon: const Icon(Icons.chevron_left_rounded), iconSize: 24, color: Colors.grey.shade700),
+                    Expanded(child: Center(child: Text(_getWeekRangeLabel(), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.deepPurple)))),
+                    IconButton(onPressed: _goToNextWeek, icon: const Icon(Icons.chevron_right_rounded), iconSize: 24, color: Colors.grey.shade700),
                   ],
                 ],
               ),
