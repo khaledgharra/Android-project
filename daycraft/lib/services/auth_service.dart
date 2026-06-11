@@ -73,4 +73,18 @@ class AuthService {
   static Future<void> signOut() async {
     await _auth.signOut();
   }
+
+  /// Update the user's display name in Firebase Auth
+  static Future<void> updateDisplayName(String name) async {
+    try {
+      final user = _auth.currentUser;
+      if (user != null) {
+        await user.updateDisplayName(name);
+        await user.reload(); // Forces Firebase to refresh cached user data
+      }
+    } catch (e) {
+      // Optional: Handle error or print it to console for debugging
+      print("Error updating display name: $e");
+    }
+  }
 }

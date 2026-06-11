@@ -4,6 +4,7 @@ import '../services/storage_service.dart';
 import '../services/auth_service.dart';
 import 'deadlines_screen.dart';
 import 'courses_screen.dart';
+import 'package:daycraft/screens/settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -14,10 +15,14 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
-  final GlobalKey<DashboardTabState> _dashboardKey = GlobalKey<DashboardTabState>();
-  final GlobalKey<TodayTimelineScreenState> _calendarKey = GlobalKey<TodayTimelineScreenState>();
-  final GlobalKey<CoursesScreenState> _coursesKey = GlobalKey<CoursesScreenState>();
-  final GlobalKey<DeadlinesScreenState> _deadlinesKey = GlobalKey<DeadlinesScreenState>();
+  final GlobalKey<DashboardTabState> _dashboardKey =
+      GlobalKey<DashboardTabState>();
+  final GlobalKey<TodayTimelineScreenState> _calendarKey =
+      GlobalKey<TodayTimelineScreenState>();
+  final GlobalKey<CoursesScreenState> _coursesKey =
+      GlobalKey<CoursesScreenState>();
+  final GlobalKey<DeadlinesScreenState> _deadlinesKey =
+      GlobalKey<DeadlinesScreenState>();
 
   late final List<Widget> _screens;
 
@@ -35,14 +40,17 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
-      ),
+      body: IndexedStack(index: _currentIndex, children: _screens),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 20, offset: const Offset(0, -4))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 20,
+              offset: const Offset(0, -4),
+            ),
+          ],
         ),
         child: SafeArea(
           child: Padding(
@@ -87,18 +95,34 @@ class _HomeScreenState extends State<HomeScreen> {
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: EdgeInsets.symmetric(horizontal: isSelected ? 16 : 12, vertical: 8),
+        padding: EdgeInsets.symmetric(
+          horizontal: isSelected ? 16 : 12,
+          vertical: 8,
+        ),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.deepPurple.withValues(alpha: 0.1) : Colors.transparent,
+          color: isSelected
+              ? Colors.deepPurple.withValues(alpha: 0.1)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 22, color: isSelected ? Colors.deepPurple : Colors.grey.shade400),
+            Icon(
+              icon,
+              size: 22,
+              color: isSelected ? Colors.deepPurple : Colors.grey.shade400,
+            ),
             if (isSelected) ...[
               const SizedBox(width: 6),
-              Text(label, style: const TextStyle(color: Colors.deepPurple, fontSize: 12, fontWeight: FontWeight.w700)),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.deepPurple,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ],
         ),
@@ -138,7 +162,10 @@ class DashboardTabState extends State<DashboardTab> {
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 24.0,
+              vertical: 16.0,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -151,12 +178,20 @@ class DashboardTabState extends State<DashboardTab> {
                       children: [
                         Text(
                           getGreeting(),
-                          style: TextStyle(fontSize: 16, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey.shade600,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           _getUserDisplayName(),
-                          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5),
+                          style: const TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.5,
+                          ),
                         ),
                       ],
                     ),
@@ -165,11 +200,52 @@ class DashboardTabState extends State<DashboardTab> {
                         color: cardColor,
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
-                          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4)),
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
                         ],
                       ),
                       child: IconButton(
-                        icon: const Icon(Icons.logout_rounded, color: Colors.grey),
+                        icon: const Icon(
+                          Icons.settings_rounded,
+                          color: Colors.grey,
+                        ),
+                        tooltip: "Settings",
+                        onPressed: () async {
+                          // 1. Wait for the user to visit and leave the Settings screen
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => SettingsScreen()),
+                          );
+
+                          // 2. The moment they come back, force this screen to redraw with the fresh data
+                          setState(() {});
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(
+                      width: 12,
+                    ), // Elegant spacing between the two buttons
+
+                    Container(
+                      decoration: BoxDecoration(
+                        color: cardColor,
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.logout_rounded,
+                          color: Colors.grey,
+                        ),
                         tooltip: "Logout",
                         onPressed: _handleLogout,
                       ),
@@ -181,14 +257,22 @@ class DashboardTabState extends State<DashboardTab> {
                 // Date Header
                 Text(
                   getFormattedDate(),
-                  style: TextStyle(fontSize: 15, color: primaryAccent.withValues(alpha: 0.8), fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: primaryAccent.withValues(alpha: 0.8),
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 28),
 
                 // --- URGENT DEADLINES ---
                 const Text(
                   "Urgent Deadlines ⚡",
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: -0.3),
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: -0.3,
+                  ),
                 ),
                 const SizedBox(height: 14),
                 _buildDeadlinesCarousel(),
@@ -197,7 +281,11 @@ class DashboardTabState extends State<DashboardTab> {
                 // --- TODAY'S UPCOMING SCHEDULE ---
                 const Text(
                   "Today's Schedule 📅",
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: -0.3),
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: -0.3,
+                  ),
                 ),
                 const SizedBox(height: 14),
                 _buildTasksTimeline(),
@@ -220,7 +308,10 @@ class DashboardTabState extends State<DashboardTab> {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: Colors.grey.shade200),
         ),
-        child: const Text("🎉 No urgent deadlines coming up!", style: TextStyle(color: Colors.grey)),
+        child: const Text(
+          "🎉 No urgent deadlines coming up!",
+          style: TextStyle(color: Colors.grey),
+        ),
       );
     }
 
@@ -256,16 +347,28 @@ class DashboardTabState extends State<DashboardTab> {
                   item["title"]?.toString() ?? "Untitled",
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.black87),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
                 ),
                 const Spacer(),
                 Row(
                   children: [
-                    Icon(Icons.access_time_rounded, size: 12, color: Colors.red.shade400),
+                    Icon(
+                      Icons.access_time_rounded,
+                      size: 12,
+                      color: Colors.red.shade400,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       item["date"]?.toString() ?? "N/A",
-                      style: TextStyle(fontSize: 12, color: Colors.red.shade400, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.red.shade400,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
@@ -286,11 +389,18 @@ class DashboardTabState extends State<DashboardTab> {
           color: cardColor,
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4)),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
           ],
         ),
         child: const Center(
-          child: Text("No more tasks today 🎉", style: TextStyle(color: Colors.grey)),
+          child: Text(
+            "No more tasks today 🎉",
+            style: TextStyle(color: Colors.grey),
+          ),
         ),
       );
     }
@@ -339,12 +449,19 @@ class DashboardTabState extends State<DashboardTab> {
               children: [
                 Text(
                   task["title"] ?? "",
-                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   "${task["start"] ?? ""} - ${task["end"] ?? ""}",
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),
@@ -370,7 +487,9 @@ class DashboardTabState extends State<DashboardTab> {
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red.shade400,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             onPressed: () => Navigator.pop(context, true),
             child: const Text("Logout"),
@@ -388,7 +507,10 @@ class DashboardTabState extends State<DashboardTab> {
     final cleaned = time.trim().toUpperCase();
     final isPM = cleaned.contains("PM");
     final isAM = cleaned.contains("AM");
-    final withoutPeriod = cleaned.replaceAll("AM", "").replaceAll("PM", "").trim();
+    final withoutPeriod = cleaned
+        .replaceAll("AM", "")
+        .replaceAll("PM", "")
+        .trim();
     final parts = withoutPeriod.split(":");
     int hour = int.parse(parts[0].trim());
     int minute = parts.length > 1 ? int.parse(parts[1].trim()) : 0;
@@ -410,7 +532,9 @@ class DashboardTabState extends State<DashboardTab> {
       if (task["start"] == null) continue;
 
       final (taskHour, taskMinute) = _parseTime(task["start"]!);
-      final isUpcoming = taskHour > currentHour || (taskHour == currentHour && taskMinute >= currentMinute);
+      final isUpcoming =
+          taskHour > currentHour ||
+          (taskHour == currentHour && taskMinute >= currentMinute);
 
       if (isUpcoming) {
         filtered.add(task);
@@ -436,7 +560,11 @@ class DashboardTabState extends State<DashboardTab> {
     try {
       final parts = dateStr.split("/");
       if (parts.length == 3) {
-        return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+        return DateTime(
+          int.parse(parts[2]),
+          int.parse(parts[1]),
+          int.parse(parts[0]),
+        );
       }
     } catch (_) {}
     return null;
@@ -467,14 +595,22 @@ class DashboardTabState extends State<DashboardTab> {
 
   String _getDayName(int weekday) {
     switch (weekday) {
-      case 1: return "Monday";
-      case 2: return "Tuesday";
-      case 3: return "Wednesday";
-      case 4: return "Thursday";
-      case 5: return "Friday";
-      case 6: return "Saturday";
-      case 7: return "Sunday";
-      default: return "";
+      case 1:
+        return "Monday";
+      case 2:
+        return "Tuesday";
+      case 3:
+        return "Wednesday";
+      case 4:
+        return "Thursday";
+      case 5:
+        return "Friday";
+      case 6:
+        return "Saturday";
+      case 7:
+        return "Sunday";
+      default:
+        return "";
     }
   }
 
@@ -494,7 +630,8 @@ class DashboardTabState extends State<DashboardTab> {
   String _getUserDisplayName() {
     final user = AuthService.currentUser;
     if (user == null) return "Student";
-    if (user.displayName != null && user.displayName!.isNotEmpty) return user.displayName!;
+    if (user.displayName != null && user.displayName!.isNotEmpty)
+      return user.displayName!;
     final email = user.email ?? "";
     if (email.contains("@")) return email.split("@")[0];
     return "Student";
