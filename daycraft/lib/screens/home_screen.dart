@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'today_timeline_screen.dart';
-import '../services/storage_service.dart';
-import '../services/auth_service.dart';
 import 'deadlines_screen.dart';
 import 'courses_screen.dart';
-import 'package:daycraft/screens/settings_screen.dart';
+import 'today_timeline_screen.dart';
+import 'settings_screen.dart';
+import '../services/auth_service.dart';
+import '../services/storage_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,625 +15,432 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
-  final GlobalKey<DashboardTabState> _dashboardKey =
-      GlobalKey<DashboardTabState>();
-  final GlobalKey<TodayTimelineScreenState> _calendarKey =
-      GlobalKey<TodayTimelineScreenState>();
-  final GlobalKey<CoursesScreenState> _coursesKey =
-      GlobalKey<CoursesScreenState>();
-  final GlobalKey<DeadlinesScreenState> _deadlinesKey =
-      GlobalKey<DeadlinesScreenState>();
+  
+  bool _isLoadingCounts = true;
+  int _todayTasksCount = 0;
+  int _upcomingDeadlinesCount = 0;
+  int _activeCoursesCount = 0;
+  List<Map<String, dynamic>> _sortedTodaySchedule = [];
+  
+  final Set<String> _completedItemIds = {};
+
+  final GlobalKey<TodayTimelineScreenState> _calendarKey = GlobalKey<TodayTimelineScreenState>();
+  final GlobalKey<CoursesScreenState> _coursesKey = GlobalKey<CoursesScreenState>();
+  final GlobalKey<DeadlinesScreenState> _deadlinesKey = GlobalKey<DeadlinesScreenState>();
 
   late final List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
+    _loadDashboardStats();
+    
     _screens = [
-      DashboardTab(key: _dashboardKey),
+      const SizedBox.shrink(), 
       TodayTimelineScreen(key: _calendarKey),
       CoursesScreen(key: _coursesKey),
       DeadlinesScreen(key: _deadlinesKey),
     ];
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(index: _currentIndex, children: _screens),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 20,
-              offset: const Offset(0, -4),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem(0, Icons.home_rounded, "Home"),
-                _buildNavItem(1, Icons.calendar_today_rounded, "Calendar"),
-                _buildNavItem(2, Icons.school_rounded, "Courses"),
-                _buildNavItem(3, Icons.assignment_rounded, "Deadlines"),
-              ],
-            ),
-          ),
-        ),
-      ),
+  Future<void> _loadDashboardStats() async {
+    if (!mounted) return;
+    setState(() => _isLoadingCounts = true);
+    try {
+      final results = await Future.wait([
+        StorageService.loadSchedule(),
+        StorageService.loadDeadlines(),
+      ]);
+
+      final rawSchedule = results[0];
+      final rawDeadlines = results[1];
+
+      final courses = rawSchedule.where((item) => item['type'] == 'Course').toList();
+      final todayTasks = rawSchedule.where((item) => item['type'] != 'Course').toList();
+
+      List<Map<String, dynamic>> sortedList = List.from(rawSchedule);
+      sortedList.sort((a, b) {
+        final String timeA = (a['startTime'] ?? a['start'] ?? a['time'] ?? '23:59').toString();
+        final String timeB = (b['startTime'] ?? b['start'] ?? b['time'] ?? '23:59').toString();
+        return timeA.compareTo(timeB);
+      });
+
+      if (mounted) {
+        setState(() {
+          _activeCoursesCount = courses.length;
+          _upcomingDeadlinesCount = rawDeadlines.length;
+          _todayTasksCount = todayTasks.length;
+          _sortedTodaySchedule = sortedList;
+          _isLoadingCounts = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading dashboard stats: $e");
+      if (mounted) {
+        setState(() => _isLoadingCounts = false);
+      }
+    }
+  }
+
+  void _onTabTapped(int idx) {
+    setState(() => _currentIndex = idx);
+    
+    switch (idx) {
+      case 0:
+        _loadDashboardStats(); 
+        break;
+      case 1:
+        _calendarKey.currentState?.loadTodayEvents();
+        break;
+      case 2:
+        _coursesKey.currentState?.loadCourses();
+        break;
+      case 3:
+        _deadlinesKey.currentState?.loadDeadlines();
+        break;
+    }
+  }
+
+  Widget _buildDashboardTab() {
+    return _DashboardTabContent(
+      isLoading: _isLoadingCounts,
+      todayTasks: _todayTasksCount,
+      deadlines: _upcomingDeadlinesCount,
+      courses: _activeCoursesCount,
+      scheduleList: _sortedTodaySchedule,
+      completedIds: _completedItemIds,
+      onRefreshProfile: () {
+        // Triggers a refresh when coming back from Settings
+        _loadDashboardStats();
+      },
+      onToggleDone: (id, isChecked) {
+        setState(() {
+          if (isChecked) {
+            _completedItemIds.add(id);
+          } else {
+            _completedItemIds.remove(id);
+          }
+        });
+      },
     );
   }
 
-  Widget _buildNavItem(int index, IconData icon, String label) {
-    final isSelected = _currentIndex == index;
-    return GestureDetector(
-      onTap: () {
-        setState(() => _currentIndex = index);
-        // Refresh the target tab's data on switch
-        switch (index) {
-          case 0:
-            _dashboardKey.currentState?.loadTodayTasks();
-            _dashboardKey.currentState?.loadUpcomingDeadlines();
-            break;
-          case 1:
-            _calendarKey.currentState?.loadTodayEvents();
-            break;
-          case 2:
-            _coursesKey.currentState?.loadCourses();
-            break;
-          case 3:
-            _deadlinesKey.currentState?.loadDeadlines();
-            break;
-        }
-      },
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: EdgeInsets.symmetric(
-          horizontal: isSelected ? 16 : 12,
-          vertical: 8,
-        ),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? Colors.deepPurple.withValues(alpha: 0.1)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFFDFBF7),
+      body: SafeArea(
+        child: IndexedStack(
+          index: _currentIndex,
           children: [
-            Icon(
-              icon,
-              size: 22,
-              color: isSelected ? Colors.deepPurple : Colors.grey.shade400,
-            ),
-            if (isSelected) ...[
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.deepPurple,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+            _buildDashboardTab(),
+            _screens[1],
+            _screens[2],
+            _screens[3],
+          ],
+        ),
+      ),
+      bottomNavigationBar: _CustomBottomNav(
+        currentIndex: _currentIndex,
+        onTap: _onTabTapped,
+      ),
+    );
+  }
+}
+
+// --- Dynamic Overview Content Area ---
+class _DashboardTabContent extends StatelessWidget {
+  final bool isLoading;
+  final int todayTasks;
+  final int deadlines;
+  final int courses;
+  final List<Map<String, dynamic>> scheduleList;
+  final Set<String> completedIds;
+  final VoidCallback onRefreshProfile;
+  final Function(String, bool) onToggleDone;
+
+  const _DashboardTabContent({
+    required this.isLoading,
+    required this.todayTasks,
+    required this.deadlines,
+    required this.courses,
+    required this.scheduleList,
+    required this.completedIds,
+    required this.onRefreshProfile,
+    required this.onToggleDone,
+  });
+
+  String _getFormattedDate() {
+    final now = DateTime.now();
+    final weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    String dayName = weekdays[now.weekday % 7];
+    String monthName = months[now.month - 1];
+    
+    return "$dayName, $monthName ${now.day}".toUpperCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: Colors.deepPurple),
+      );
+    }
+
+    final user = AuthService.currentUser;
+    final displayName = user?.displayName?.isNotEmpty == true
+        ? user!.displayName!
+        : (user?.email?.split('@').first ?? 'Student');
+
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
+      physics: const BouncingScrollPhysics(),
+      children: [
+        // --- High-Fidelity Soft Premium Header ---
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Hello, $displayName', 
+                      style: const TextStyle(
+                        fontFamily: 'Avenir', 
+                        fontSize: 23, 
+                        fontWeight: FontWeight.w500, 
+                        color: Color(0xFF222222), // Fixed the compile error color here
+                        letterSpacing: 0.0,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _getFormattedDate(),
+                      style: TextStyle(
+                        fontFamily: 'Avenir',
+                        fontSize: 11, 
+                        fontWeight: FontWeight.w600, 
+                        color: Colors.deepPurple.shade300,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
                 ),
               ),
+              Row(
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.settings_rounded, color: Colors.grey.shade600, size: 23),
+                    onPressed: () async {
+                      // Await navigation path completion so it re-renders immediately on back press
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                      );
+                      onRefreshProfile();
+                    },
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.logout_rounded, color: Colors.grey.shade600, size: 23),
+                    onPressed: () async {
+                      await AuthService.signOut();
+                    },
+                  ),
+                ],
+              ),
             ],
-          ],
+          ),
         ),
-      ),
-    );
-  }
-}
 
-/// The Dashboard / Home tab with greetings, urgent deadlines, and today's quick summary
-class DashboardTab extends StatefulWidget {
-  const DashboardTab({super.key});
-
-  @override
-  State<DashboardTab> createState() => DashboardTabState();
-}
-
-class DashboardTabState extends State<DashboardTab> {
-  List<Map<String, dynamic>> todayTasks = [];
-  List<Map<String, dynamic>> upcomingDeadlines = [];
-
-  final Color backgroundColor = const Color(0xFFFDFBF7);
-  final Color primaryAccent = Colors.deepPurple;
-  final Color cardColor = Colors.white;
-
-  @override
-  void initState() {
-    super.initState();
-    loadTodayTasks();
-    loadUpcomingDeadlines();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 24.0,
-              vertical: 16.0,
+        // Balanced & Clean Overview Cards
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: _BalancedInfoCard(title: 'Tasks Today', value: '$todayTasks', color: Colors.indigo)),
+              const SizedBox(width: 8),
+              Expanded(child: _BalancedInfoCard(title: 'Deadlines', value: '$deadlines', color: Colors.deepPurple)),
+              const SizedBox(width: 8),
+              Expanded(child: _BalancedInfoCard(title: 'Courses', value: '$courses', color: Colors.pink)),
+            ],
+          ),
+        ),
+        
+        const SizedBox(height: 32),
+        const Text(
+          "Today's Schedule", 
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: Colors.black87),
+        ),
+        const SizedBox(height: 14),
+        
+        // Checklist Schedule Stream 
+        if (scheduleList.isEmpty)
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 36),
+            alignment: Alignment.center,
+            child: Text(
+              'No items scheduled yet for today.',
+              style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // --- TOP ROW: GREETINGS & LOGOUT ---
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+          )
+        else
+          ...scheduleList.map((item) {
+            final String docId = item['id']?.toString() ?? UniqueKey().toString();
+            final bool isDone = completedIds.contains(docId);
+            final String name = item['name'] ?? item['title'] ?? 'Scheduled Item';
+
+            final String start = (item['start'] ?? item['startTime'] ?? '').toString();
+            final String end = (item['end'] ?? item['endTime'] ?? '').toString();
+            final String timeDisplay = (start.isNotEmpty && end.isNotEmpty) ? '$start - $end' : (start.isNotEmpty ? start : 'All Day');
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10.0),
+              key: ValueKey(docId),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                decoration: BoxDecoration(
+                  color: isDone ? Colors.grey.shade50 : Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.02),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: CheckboxListTile(
+                  value: isDone,
+                  activeColor: Colors.deepPurple,
+                  checkboxShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  onChanged: (val) => onToggleDone(docId, val ?? false),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  title: Text(
+                    name,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: isDone ? Colors.grey.shade400 : Colors.black87,
+                      decoration: isDone ? TextDecoration.lineThrough : null,
+                    ),
+                  ),
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 4.0),
+                    child: Row(
                       children: [
-                        Text(
-                          getGreeting(),
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey.shade600,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _getUserDisplayName(),
-                          style: const TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: -0.5,
+                        Icon(Icons.access_time_rounded, size: 14, color: isDone ? Colors.grey.shade400 : Colors.deepPurple.withOpacity(0.6)),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            timeDisplay,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: isDone ? Colors.grey.shade400 : Colors.deepPurple.shade700,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
                     ),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: cardColor,
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: IconButton(
-                        icon: const Icon(
-                          Icons.settings_rounded,
-                          color: Colors.grey,
-                        ),
-                        tooltip: "Settings",
-                        onPressed: () async {
-                          // 1. Wait for the user to visit and leave the Settings screen
-                          await Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => SettingsScreen()),
-                          );
-
-                          // 2. The moment they come back, force this screen to redraw with the fresh data
-                          setState(() {});
-                        },
-                      ),
-                    ),
-
-                    const SizedBox(
-                      width: 12,
-                    ), // Elegant spacing between the two buttons
-
-                    Container(
-                      decoration: BoxDecoration(
-                        color: cardColor,
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: IconButton(
-                        icon: const Icon(
-                          Icons.logout_rounded,
-                          color: Colors.grey,
-                        ),
-                        tooltip: "Logout",
-                        onPressed: _handleLogout,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                // Date Header
-                Text(
-                  getFormattedDate(),
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: primaryAccent.withValues(alpha: 0.8),
-                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 28),
-
-                // --- URGENT DEADLINES ---
-                const Text(
-                  "Urgent Deadlines ⚡",
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                _buildDeadlinesCarousel(),
-                const SizedBox(height: 32),
-
-                // --- TODAY'S UPCOMING SCHEDULE ---
-                const Text(
-                  "Today's Schedule 📅",
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                _buildTasksTimeline(),
-                const SizedBox(height: 24),
-              ],
-            ),
-          ),
-        ),
-      ),
+              ),
+            );
+          }),
+      ],
     );
   }
+}
 
-  Widget _buildDeadlinesCarousel() {
-    if (upcomingDeadlines.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.grey.shade200),
-        ),
-        child: const Text(
-          "🎉 No urgent deadlines coming up!",
-          style: TextStyle(color: Colors.grey),
-        ),
-      );
-    }
+// --- Corrected Structural Modern Stats Cards ---
+class _BalancedInfoCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final Color color;
 
-    return SizedBox(
-      height: 100,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        itemCount: upcomingDeadlines.take(5).length,
-        itemBuilder: (context, index) {
-          final item = upcomingDeadlines[index];
-          return Container(
-            width: 190,
-            margin: const EdgeInsets.only(right: 14, bottom: 6),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.red.withValues(alpha: 0.08),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-              border: Border.all(color: Colors.red.shade300, width: 2),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  item["title"]?.toString() ?? "Untitled",
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-                const Spacer(),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.access_time_rounded,
-                      size: 12,
-                      color: Colors.red.shade400,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      item["date"]?.toString() ?? "N/A",
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.red.shade400,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
+  const _BalancedInfoCard({required this.title, required this.value, required this.color});
 
-  Widget _buildTasksTimeline() {
-    if (todayTasks.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
-        decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: const Center(
-          child: Text(
-            "No more tasks today 🎉",
-            style: TextStyle(color: Colors.grey),
-          ),
-        ),
-      );
-    }
-
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: todayTasks.length,
-      itemBuilder: (context, index) {
-        final task = todayTasks[index];
-        return _scheduleCard(task);
-      },
-    );
-  }
-
-  Widget _scheduleCard(Map<String, dynamic> task) {
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(12.0),
       decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(20),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
+            color: Colors.black.withOpacity(0.03),
             blurRadius: 8,
-            offset: const Offset(0, 4),
+            offset: const Offset(0, 2),
           ),
         ],
-        border: Border.all(color: Colors.grey.shade100),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title, 
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.black54),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value, 
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: color),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           Container(
-            width: 4,
-            height: 45,
+            width: 18, 
+            height: 3, 
             decoration: BoxDecoration(
-              color: primaryAccent.withValues(alpha: 0.6),
+              color: color, 
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  task["title"] ?? "",
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  "${task["start"] ?? ""} - ${task["end"] ?? ""}",
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
   }
+}
 
-  Future<void> _handleLogout() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("Logout"),
-        content: const Text("Are you sure you want to logout?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade400,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("Logout"),
-          ),
-        ],
-      ),
+// --- Bottom Navigation View ---
+class _CustomBottomNav extends StatelessWidget {
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+
+  const _CustomBottomNav({required this.currentIndex, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return BottomNavigationBar(
+      currentIndex: currentIndex,
+      onTap: onTap,
+      type: BottomNavigationBarType.fixed,
+      backgroundColor: Colors.white,
+      selectedItemColor: Colors.deepPurple,
+      unselectedItemColor: Colors.grey.shade400,
+      selectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+      unselectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+      items: const [
+        BottomNavigationBarItem(icon: Icon(Icons.dashboard_rounded, size: 22), label: 'Overview'),
+        BottomNavigationBarItem(icon: Icon(Icons.calendar_today_rounded, size: 20), label: 'Schedule'),
+        BottomNavigationBarItem(icon: Icon(Icons.school_rounded, size: 22), label: 'Courses'),
+        BottomNavigationBarItem(icon: Icon(Icons.assignment_rounded, size: 22), label: 'Deadlines'),
+      ],
     );
-    if (confirm == true) {
-      await AuthService.signOut();
-    }
-  }
-
-  // --- Helpers ---
-  (int, int) _parseTime(String time) {
-    final cleaned = time.trim().toUpperCase();
-    final isPM = cleaned.contains("PM");
-    final isAM = cleaned.contains("AM");
-    final withoutPeriod = cleaned
-        .replaceAll("AM", "")
-        .replaceAll("PM", "")
-        .trim();
-    final parts = withoutPeriod.split(":");
-    int hour = int.parse(parts[0].trim());
-    int minute = parts.length > 1 ? int.parse(parts[1].trim()) : 0;
-    if (isPM && hour != 12) hour += 12;
-    if (isAM && hour == 12) hour = 0;
-    return (hour, minute);
-  }
-
-  Future<void> loadTodayTasks() async {
-    final allTasks = await StorageService.loadSchedule();
-    final now = DateTime.now();
-    final currentDay = _getDayName(now.weekday);
-    final currentHour = now.hour;
-    final currentMinute = now.minute;
-
-    List<Map<String, dynamic>> filtered = [];
-    for (var task in allTasks) {
-      if (task["day"] != currentDay) continue;
-      if (task["start"] == null) continue;
-
-      final (taskHour, taskMinute) = _parseTime(task["start"]!);
-      final isUpcoming =
-          taskHour > currentHour ||
-          (taskHour == currentHour && taskMinute >= currentMinute);
-
-      if (isUpcoming) {
-        filtered.add(task);
-      }
-    }
-
-    // Sort by start time
-    filtered.sort((a, b) {
-      final (aH, aM) = _parseTime(a["start"]!);
-      final (bH, bM) = _parseTime(b["start"]!);
-      return (aH * 60 + aM).compareTo(bH * 60 + bM);
-    });
-
-    if (!mounted) return;
-    setState(() => todayTasks = filtered);
-  }
-
-  DateTime? _parseDeadlineDate(String? dateStr) {
-    if (dateStr == null || dateStr.isEmpty) return null;
-    try {
-      return DateTime.parse(dateStr);
-    } catch (_) {}
-    try {
-      final parts = dateStr.split("/");
-      if (parts.length == 3) {
-        return DateTime(
-          int.parse(parts[2]),
-          int.parse(parts[1]),
-          int.parse(parts[0]),
-        );
-      }
-    } catch (_) {}
-    return null;
-  }
-
-  Future<void> loadUpcomingDeadlines() async {
-    final allDeadlines = await StorageService.loadDeadlines();
-    final now = DateTime.now();
-
-    final upcoming = allDeadlines.where((d) {
-      final date = _parseDeadlineDate(d["date"]?.toString());
-      if (date == null) return true;
-      return date.isAfter(now.subtract(const Duration(days: 1)));
-    }).toList();
-
-    upcoming.sort((a, b) {
-      final dateA = _parseDeadlineDate(a["date"]?.toString());
-      final dateB = _parseDeadlineDate(b["date"]?.toString());
-      if (dateA == null || dateB == null) return 0;
-      return dateA.compareTo(dateB);
-    });
-
-    if (!mounted) return;
-    setState(() {
-      upcomingDeadlines = upcoming;
-    });
-  }
-
-  String _getDayName(int weekday) {
-    switch (weekday) {
-      case 1:
-        return "Monday";
-      case 2:
-        return "Tuesday";
-      case 3:
-        return "Wednesday";
-      case 4:
-        return "Thursday";
-      case 5:
-        return "Friday";
-      case 6:
-        return "Saturday";
-      case 7:
-        return "Sunday";
-      default:
-        return "";
-    }
-  }
-
-  String getGreeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return "Good Morning ☀️";
-    if (hour < 18) return "Good Afternoon 🌤";
-    return "Good Evening 🌙";
-  }
-
-  String getFormattedDate() {
-    final now = DateTime.now();
-    final day = _getDayName(now.weekday);
-    return "$day, ${now.day}/${now.month}/${now.year}";
-  }
-
-  String _getUserDisplayName() {
-    final user = AuthService.currentUser;
-    if (user == null) return "Student";
-    if (user.displayName != null && user.displayName!.isNotEmpty)
-      return user.displayName!;
-    final email = user.email ?? "";
-    if (email.contains("@")) return email.split("@")[0];
-    return "Student";
   }
 }
