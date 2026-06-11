@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // Handles direct local storage
 import 'deadlines_screen.dart';
 import 'courses_screen.dart';
 import 'today_timeline_screen.dart';
@@ -22,7 +23,8 @@ class _HomeScreenState extends State<HomeScreen> {
   int _activeCoursesCount = 0;
   List<Map<String, dynamic>> _sortedTodaySchedule = [];
   
-  final Set<String> _completedItemIds = {};
+  Set<String> _completedItemIds = {};
+  static const String _completedTasksKey = 'completed_tasks_ids';
 
   final GlobalKey<TodayTimelineScreenState> _calendarKey = GlobalKey<TodayTimelineScreenState>();
   final GlobalKey<CoursesScreenState> _coursesKey = GlobalKey<CoursesScreenState>();
@@ -47,13 +49,19 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
     setState(() => _isLoadingCounts = true);
     try {
+      // Pulling schedule data, deadline entries concurrently
       final results = await Future.wait([
         StorageService.loadSchedule(),
         StorageService.loadDeadlines(),
+        SharedPreferences.getInstance(), // Direct local storage instance fetch
       ]);
 
-      final rawSchedule = results[0];
-      final rawDeadlines = results[1];
+      final rawSchedule = results[0] as List;
+      final rawDeadlines = results[1] as List;
+      final prefs = results[2] as SharedPreferences;
+
+      // Extract saved completed list securely
+      final List<String> savedCompletedList = prefs.getStringList(_completedTasksKey) ?? [];
 
       final courses = rawSchedule.where((item) => item['type'] == 'Course').toList();
       final todayTasks = rawSchedule.where((item) => item['type'] != 'Course').toList();
@@ -71,11 +79,12 @@ class _HomeScreenState extends State<HomeScreen> {
           _upcomingDeadlinesCount = rawDeadlines.length;
           _todayTasksCount = todayTasks.length;
           _sortedTodaySchedule = sortedList;
+          _completedItemIds = savedCompletedList.toSet(); 
           _isLoadingCounts = false;
         });
       }
     } catch (e) {
-      debugPrint("Error loading dashboard stats: $e");
+      debugPrint("Error loading dashboard stats or checklist memory: $e");
       if (mounted) {
         setState(() => _isLoadingCounts = false);
       }
@@ -110,10 +119,9 @@ class _HomeScreenState extends State<HomeScreen> {
       scheduleList: _sortedTodaySchedule,
       completedIds: _completedItemIds,
       onRefreshProfile: () {
-        // Triggers a refresh when coming back from Settings
         _loadDashboardStats();
       },
-      onToggleDone: (id, isChecked) {
+      onToggleDone: (id, isChecked) async {
         setState(() {
           if (isChecked) {
             _completedItemIds.add(id);
@@ -121,6 +129,14 @@ class _HomeScreenState extends State<HomeScreen> {
             _completedItemIds.remove(id);
           }
         });
+        
+        // Persist locally directly within the view action layer
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setStringList(_completedTasksKey, _completedItemIds.toList());
+        } catch (e) {
+          debugPrint("Failed to persist task state update locally: $e");
+        }
       },
     );
   }
@@ -215,7 +231,7 @@ class _DashboardTabContent extends StatelessWidget {
                         fontFamily: 'Avenir', 
                         fontSize: 23, 
                         fontWeight: FontWeight.w500, 
-                        color: Color(0xFF222222), // Fixed the compile error color here
+                        color: Color(0xFF222222), 
                         letterSpacing: 0.0,
                       ),
                       overflow: TextOverflow.ellipsis,
@@ -239,7 +255,6 @@ class _DashboardTabContent extends StatelessWidget {
                   IconButton(
                     icon: Icon(Icons.settings_rounded, color: Colors.grey.shade600, size: 23),
                     onPressed: () async {
-                      // Await navigation path completion so it re-renders immediately on back press
                       await Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const SettingsScreen()),
                       );
