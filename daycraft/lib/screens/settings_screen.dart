@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart'; // <-- THIS WAS MISSING
+import 'package:flutter/material.dart'; 
 import 'package:daycraft/services/auth_service.dart';
+// ignore: unused_import
 import 'package:daycraft/services/notification_service.dart';
 
 class SettingsScreen extends StatefulWidget {
