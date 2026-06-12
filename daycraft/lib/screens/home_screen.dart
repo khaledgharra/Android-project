@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // Handles direct local storage
+import 'package:shared_preferences/shared_preferences.dart';
 import 'deadlines_screen.dart';
 import 'courses_screen.dart';
 import 'today_timeline_screen.dart';
@@ -20,7 +20,6 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoadingCounts = true;
   int _todayTasksCount = 0;
   int _upcomingDeadlinesCount = 0;
-  int _activeCoursesCount = 0;
   List<Map<String, dynamic>> _sortedTodaySchedule = [];
   
   Set<String> _completedItemIds = {};
@@ -45,46 +44,82 @@ class _HomeScreenState extends State<HomeScreen> {
     ];
   }
 
+  bool _isItemForToday(Map<String, dynamic> item, DateTime today) {
+    final dateVal = item['date']?.toString();
+    if (dateVal != null && dateVal.isNotEmpty) {
+      try {
+        final parsed = DateTime.parse(dateVal);
+        return parsed.year == today.year && parsed.month == today.month && parsed.day == today.day;
+      } catch (_) {}
+    }
+    
+    final startVal = item['start']?.toString() ?? '';
+    if (startVal.isNotEmpty) {
+      try {
+        final dt = DateTime.parse(startVal);
+        return dt.year == today.year && dt.month == today.month && dt.day == today.day;
+      } catch (_) {}
+    }
+    return false;
+  }
+
   Future<void> _loadDashboardStats() async {
     if (!mounted) return;
     setState(() => _isLoadingCounts = true);
     try {
-      // Pulling schedule data, deadline entries concurrently
+      // 1. Fetch backend layout models concurrently
       final results = await Future.wait([
         StorageService.loadSchedule(),
         StorageService.loadDeadlines(),
-        SharedPreferences.getInstance(), // Direct local storage instance fetch
       ]);
 
       final rawSchedule = results[0] as List;
       final rawDeadlines = results[1] as List;
-      final prefs = results[2] as SharedPreferences;
 
-      // Extract saved completed list securely
+      // 2. Fetch local storage checkbox memory preferences
+      final prefs = await SharedPreferences.getInstance();
       final List<String> savedCompletedList = prefs.getStringList(_completedTasksKey) ?? [];
 
-      final courses = rawSchedule.where((item) => item['type'] == 'Course').toList();
-      final todayTasks = rawSchedule.where((item) => item['type'] != 'Course').toList();
+      final now = DateTime.now();
+      final todayMidnight = DateTime(now.year, now.month, now.day);
 
-      List<Map<String, dynamic>> sortedList = List.from(rawSchedule);
+      // 3. Keep only genuine task types (ignoring course objects completely)
+      final globalTasks = rawSchedule.where((item) {
+        final String type = (item['type'] ?? '').toString().toLowerCase();
+        return type != 'course' && !item.containsKey('courseCode') && !item.containsKey('subject');
+      }).toList();
+
+      // 4. Narrow down arrays strictly to today's date context
+      final todayOnlyTasks = globalTasks.where((item) => _isItemForToday(item, todayMidnight)).toList();
+
+      // 5. Build sorted stream map array for display timeline
+      List<Map<String, dynamic>> sortedList = List.from(todayOnlyTasks);
       sortedList.sort((a, b) {
-        final String timeA = (a['startTime'] ?? a['start'] ?? a['time'] ?? '23:59').toString();
-        final String timeB = (b['startTime'] ?? b['start'] ?? b['time'] ?? '23:59').toString();
-        return timeA.compareTo(timeB);
+        String parseTime(Map<String, dynamic> element) {
+          final rawTime = element['startTime'] ?? element['start'] ?? element['time'] ?? '23:59';
+          final timeStr = rawTime.toString().trim();
+          if (timeStr.contains('T') || timeStr.contains(' ')) {
+            try {
+              final parsedDt = DateTime.parse(timeStr);
+              return "${parsedDt.hour.toString().padLeft(2, '0')}:${parsedDt.minute.toString().padLeft(2, '0')}";
+            } catch (_) {}
+          }
+          return timeStr.isNotEmpty ? timeStr : '23:59';
+        }
+        return parseTime(a).compareTo(parseTime(b));
       });
 
       if (mounted) {
         setState(() {
-          _activeCoursesCount = courses.length;
           _upcomingDeadlinesCount = rawDeadlines.length;
-          _todayTasksCount = todayTasks.length;
+          _todayTasksCount = todayOnlyTasks.length;         
           _sortedTodaySchedule = sortedList;
           _completedItemIds = savedCompletedList.toSet(); 
           _isLoadingCounts = false;
         });
       }
     } catch (e) {
-      debugPrint("Error loading dashboard stats or checklist memory: $e");
+      debugPrint("Error pipeline overview parsing layout: $e");
       if (mounted) {
         setState(() => _isLoadingCounts = false);
       }
@@ -115,7 +150,6 @@ class _HomeScreenState extends State<HomeScreen> {
       isLoading: _isLoadingCounts,
       todayTasks: _todayTasksCount,
       deadlines: _upcomingDeadlinesCount,
-      courses: _activeCoursesCount,
       scheduleList: _sortedTodaySchedule,
       completedIds: _completedItemIds,
       onRefreshProfile: () {
@@ -130,12 +164,11 @@ class _HomeScreenState extends State<HomeScreen> {
           }
         });
         
-        // Persist locally directly within the view action layer
         try {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setStringList(_completedTasksKey, _completedItemIds.toList());
         } catch (e) {
-          debugPrint("Failed to persist task state update locally: $e");
+          debugPrint("Failed to persist item state transformation check: $e");
         }
       },
     );
@@ -169,7 +202,6 @@ class _DashboardTabContent extends StatelessWidget {
   final bool isLoading;
   final int todayTasks;
   final int deadlines;
-  final int courses;
   final List<Map<String, dynamic>> scheduleList;
   final Set<String> completedIds;
   final VoidCallback onRefreshProfile;
@@ -179,7 +211,6 @@ class _DashboardTabContent extends StatelessWidget {
     required this.isLoading,
     required this.todayTasks,
     required this.deadlines,
-    required this.courses,
     required this.scheduleList,
     required this.completedIds,
     required this.onRefreshProfile,
@@ -214,7 +245,7 @@ class _DashboardTabContent extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
       physics: const BouncingScrollPhysics(),
       children: [
-        // --- High-Fidelity Soft Premium Header ---
+        // --- Premium Header ---
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 16.0),
           child: Row(
@@ -232,7 +263,6 @@ class _DashboardTabContent extends StatelessWidget {
                         fontSize: 23, 
                         fontWeight: FontWeight.w500, 
                         color: Color(0xFF222222), 
-                        letterSpacing: 0.0,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -273,16 +303,15 @@ class _DashboardTabContent extends StatelessWidget {
           ),
         ),
 
-        // Balanced & Clean Overview Cards
-        IntrinsicHeight(
+        // Shrunk Low-Profile Stats Bar Deck
+        SizedBox(
+          height: 75, // Lock uniform low profile height profile frame
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(child: _BalancedInfoCard(title: 'Tasks Today', value: '$todayTasks', color: Colors.indigo)),
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
               Expanded(child: _BalancedInfoCard(title: 'Deadlines', value: '$deadlines', color: Colors.deepPurple)),
-              const SizedBox(width: 8),
-              Expanded(child: _BalancedInfoCard(title: 'Courses', value: '$courses', color: Colors.pink)),
             ],
           ),
         ),
@@ -294,13 +323,13 @@ class _DashboardTabContent extends StatelessWidget {
         ),
         const SizedBox(height: 14),
         
-        // Checklist Schedule Stream 
+        // Checklist Stream
         if (scheduleList.isEmpty)
           Container(
             padding: const EdgeInsets.symmetric(vertical: 36),
             alignment: Alignment.center,
             child: Text(
-              'No items scheduled yet for today.',
+              'No tasks scheduled for today.',
               style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
             ),
           )
@@ -312,7 +341,20 @@ class _DashboardTabContent extends StatelessWidget {
 
             final String start = (item['start'] ?? item['startTime'] ?? '').toString();
             final String end = (item['end'] ?? item['endTime'] ?? '').toString();
-            final String timeDisplay = (start.isNotEmpty && end.isNotEmpty) ? '$start - $end' : (start.isNotEmpty ? start : 'All Day');
+            
+            String formatTimeString(String raw) {
+              if (raw.contains('T') || raw.contains(' ')) {
+                try {
+                  final p = DateTime.parse(raw);
+                  return "${p.hour.toString().padLeft(2, '0')}:${p.minute.toString().padLeft(2, '0')}";
+                } catch (_) {}
+              }
+              return raw;
+            }
+
+            final String cleanStart = formatTimeString(start);
+            final String cleanEnd = formatTimeString(end);
+            final String timeDisplay = (cleanStart.isNotEmpty && cleanEnd.isNotEmpty) ? '$cleanStart - $cleanEnd' : (cleanStart.isNotEmpty ? cleanStart : 'All Day');
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 10.0),
@@ -374,7 +416,7 @@ class _DashboardTabContent extends StatelessWidget {
   }
 }
 
-// --- Corrected Structural Modern Stats Cards ---
+// --- Compacted, Lower Profile Stats Card Components ---
 class _BalancedInfoCard extends StatelessWidget {
   final String title;
   final String value;
@@ -385,42 +427,45 @@ class _BalancedInfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12.0),
+      padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0), // Tightened inner vertical spacing
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 8,
+            color: Colors.black.withOpacity(0.025),
+            blurRadius: 6,
             offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title, 
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.black54),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                value, 
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: color),
-              ),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  title, 
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.black54),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value, 
+                  style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: color),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 12),
+          // Moved the color bar from bottom to side vertical pillar format for spatial efficiency
           Container(
-            width: 18, 
-            height: 3, 
+            width: 3, 
+            height: 24, 
             decoration: BoxDecoration(
               color: color, 
               borderRadius: BorderRadius.circular(2),
