@@ -16,12 +16,13 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
-  
+
   bool _isLoadingCounts = true;
   int _todayTasksCount = 0;
   int _upcomingDeadlinesCount = 0;
+  int _activeCoursesCount = 0;
   List<Map<String, dynamic>> _sortedTodaySchedule = [];
-  
+
   Set<String> _completedItemIds = {};
   static const String _completedTasksKey = 'completed_tasks_ids';
 
@@ -35,9 +36,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadDashboardStats();
-    
     _screens = [
-      const SizedBox.shrink(), 
+      const SizedBox.shrink(),
       TodayTimelineScreen(key: _calendarKey),
       CoursesScreen(key: _coursesKey),
       DeadlinesScreen(key: _deadlinesKey),
@@ -52,7 +52,6 @@ class _HomeScreenState extends State<HomeScreen> {
         return parsed.year == today.year && parsed.month == today.month && parsed.day == today.day;
       } catch (_) {}
     }
-    
     final startVal = item['start']?.toString() ?? '';
     if (startVal.isNotEmpty) {
       try {
@@ -67,7 +66,6 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
     setState(() => _isLoadingCounts = true);
     try {
-      // 1. Fetch backend layout models concurrently
       final results = await Future.wait([
         StorageService.loadSchedule(),
         StorageService.loadDeadlines(),
@@ -76,23 +74,24 @@ class _HomeScreenState extends State<HomeScreen> {
       final rawSchedule = results[0] as List;
       final rawDeadlines = results[1] as List;
 
-      // 2. Fetch local storage checkbox memory preferences
       final prefs = await SharedPreferences.getInstance();
       final List<String> savedCompletedList = prefs.getStringList(_completedTasksKey) ?? [];
 
       final now = DateTime.now();
       final todayMidnight = DateTime(now.year, now.month, now.day);
 
-      // 3. Keep only genuine task types (ignoring course objects completely)
+      final courses = rawSchedule.where((item) {
+        final String type = (item['type'] ?? '').toString().toLowerCase();
+        return type == 'course' && item['name'] != null && !item.containsKey('courseName');
+      }).toList();
+
       final globalTasks = rawSchedule.where((item) {
         final String type = (item['type'] ?? '').toString().toLowerCase();
         return type != 'course' && !item.containsKey('courseCode') && !item.containsKey('subject');
       }).toList();
 
-      // 4. Narrow down arrays strictly to today's date context
       final todayOnlyTasks = globalTasks.where((item) => _isItemForToday(item, todayMidnight)).toList();
 
-      // 5. Build sorted stream map array for display timeline
       List<Map<String, dynamic>> sortedList = List.from(todayOnlyTasks);
       sortedList.sort((a, b) {
         String parseTime(Map<String, dynamic> element) {
@@ -112,36 +111,26 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) {
         setState(() {
           _upcomingDeadlinesCount = rawDeadlines.length;
-          _todayTasksCount = todayOnlyTasks.length;         
+          _todayTasksCount = todayOnlyTasks.length;
+          _activeCoursesCount = courses.length;
           _sortedTodaySchedule = sortedList;
-          _completedItemIds = savedCompletedList.toSet(); 
+          _completedItemIds = savedCompletedList.toSet();
           _isLoadingCounts = false;
         });
       }
     } catch (e) {
-      debugPrint("Error pipeline overview parsing layout: $e");
-      if (mounted) {
-        setState(() => _isLoadingCounts = false);
-      }
+      debugPrint("Error loading dashboard: $e");
+      if (mounted) setState(() => _isLoadingCounts = false);
     }
   }
 
   void _onTabTapped(int idx) {
     setState(() => _currentIndex = idx);
-    
     switch (idx) {
-      case 0:
-        _loadDashboardStats(); 
-        break;
-      case 1:
-        _calendarKey.currentState?.loadTodayEvents();
-        break;
-      case 2:
-        _coursesKey.currentState?.loadCourses();
-        break;
-      case 3:
-        _deadlinesKey.currentState?.loadDeadlines();
-        break;
+      case 0: _loadDashboardStats(); break;
+      case 1: _calendarKey.currentState?.loadTodayEvents(); break;
+      case 2: _coursesKey.currentState?.loadCourses(); break;
+      case 3: _deadlinesKey.currentState?.loadDeadlines(); break;
     }
   }
 
@@ -150,25 +139,23 @@ class _HomeScreenState extends State<HomeScreen> {
       isLoading: _isLoadingCounts,
       todayTasks: _todayTasksCount,
       deadlines: _upcomingDeadlinesCount,
+      courses: _activeCoursesCount,
       scheduleList: _sortedTodaySchedule,
       completedIds: _completedItemIds,
-      onRefreshProfile: () {
-        _loadDashboardStats();
-      },
+      onRefreshProfile: _loadDashboardStats,
+      onDeadlinesTap: () => _onTabTapped(3),
+      onCoursesTap: () => _onTabTapped(2),
+      onScheduleTap: () => _onTabTapped(1),
       onToggleDone: (id, isChecked) async {
         setState(() {
-          if (isChecked) {
-            _completedItemIds.add(id);
-          } else {
-            _completedItemIds.remove(id);
-          }
+          if (isChecked) _completedItemIds.add(id);
+          else _completedItemIds.remove(id);
         });
-        
         try {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setStringList(_completedTasksKey, _completedItemIds.toList());
         } catch (e) {
-          debugPrint("Failed to persist item state transformation check: $e");
+          debugPrint("Failed to persist task state: $e");
         }
       },
     );
@@ -177,7 +164,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFDFBF7),
+      backgroundColor: const Color(0xFFF4F3F8),
       body: SafeArea(
         child: IndexedStack(
           index: _currentIndex,
@@ -197,287 +184,408 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// --- Dynamic Overview Content Area ---
+// ─────────────────────────────────────────────
+// Dashboard Content
+// ─────────────────────────────────────────────
 class _DashboardTabContent extends StatelessWidget {
   final bool isLoading;
   final int todayTasks;
   final int deadlines;
+  final int courses;
   final List<Map<String, dynamic>> scheduleList;
   final Set<String> completedIds;
   final VoidCallback onRefreshProfile;
+  final VoidCallback onDeadlinesTap;
+  final VoidCallback onCoursesTap;
+  final VoidCallback onScheduleTap;
   final Function(String, bool) onToggleDone;
 
   const _DashboardTabContent({
     required this.isLoading,
     required this.todayTasks,
     required this.deadlines,
+    required this.courses,
     required this.scheduleList,
     required this.completedIds,
     required this.onRefreshProfile,
+    required this.onDeadlinesTap,
+    required this.onCoursesTap,
+    required this.onScheduleTap,
     required this.onToggleDone,
   });
 
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
   String _getFormattedDate() {
     final now = DateTime.now();
-    final weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    
-    String dayName = weekdays[now.weekday % 7];
-    String monthName = months[now.month - 1];
-    
-    return "$dayName, $monthName ${now.day}".toUpperCase();
+    const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const months = ['January', 'February', 'March', 'April', 'May', 'June',
+                    'July', 'August', 'September', 'October', 'November', 'December'];
+    return "${weekdays[now.weekday % 7]}, ${months[now.month - 1]} ${now.day}";
   }
 
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: Colors.deepPurple),
-      );
+      return const Center(child: CircularProgressIndicator(color: Colors.deepPurple));
     }
 
     final user = AuthService.currentUser;
     final displayName = user?.displayName?.isNotEmpty == true
         ? user!.displayName!
         : (user?.email?.split('@').first ?? 'Student');
+    final initials = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'S';
+
+    final doneCount = scheduleList.where((i) => completedIds.contains(i['id']?.toString())).length;
+    final total = scheduleList.length;
+    final progress = total > 0 ? doneCount / total : 0.0;
 
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
+      padding: EdgeInsets.zero,
       physics: const BouncingScrollPhysics(),
       children: [
-        // --- Premium Header ---
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
+        // ── Gradient Header Banner ──
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF5C35C9), Color(0xFF3B6FE8)],
+            ),
+            borderRadius: BorderRadius.only(
+              bottomLeft: Radius.circular(32),
+              bottomRight: Radius.circular(32),
+            ),
+          ),
+          padding: const EdgeInsets.fromLTRB(24, 20, 20, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Hello, $displayName', 
-                      style: const TextStyle(
-                        fontFamily: 'Avenir', 
-                        fontSize: 23, 
-                        fontWeight: FontWeight.w500, 
-                        color: Color(0xFF222222), 
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _getFormattedDate(),
-                      style: TextStyle(
-                        fontFamily: 'Avenir',
-                        fontSize: 11, 
-                        fontWeight: FontWeight.w600, 
-                        color: Colors.deepPurple.shade300,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
               Row(
                 children: [
-                  IconButton(
-                    icon: Icon(Icons.settings_rounded, color: Colors.grey.shade600, size: 23),
-                    onPressed: () async {
-                      await Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                      );
-                      onRefreshProfile();
-                    },
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.logout_rounded, color: Colors.grey.shade600, size: 23),
-                    onPressed: () async {
-                      await AuthService.signOut();
-                    },
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-
-        // Shrunk Low-Profile Stats Bar Deck
-        SizedBox(
-          height: 75, // Lock uniform low profile height profile frame
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: _BalancedInfoCard(title: 'Tasks Today', value: '$todayTasks', color: Colors.indigo)),
-              const SizedBox(width: 12),
-              Expanded(child: _BalancedInfoCard(title: 'Deadlines', value: '$deadlines', color: Colors.deepPurple)),
-            ],
-          ),
-        ),
-        
-        const SizedBox(height: 32),
-        const Text(
-          "Today's Schedule", 
-          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: Colors.black87),
-        ),
-        const SizedBox(height: 14),
-        
-        // Checklist Stream
-        if (scheduleList.isEmpty)
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 36),
-            alignment: Alignment.center,
-            child: Text(
-              'No tasks scheduled for today.',
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-            ),
-          )
-        else
-          ...scheduleList.map((item) {
-            final String docId = item['id']?.toString() ?? UniqueKey().toString();
-            final bool isDone = completedIds.contains(docId);
-            final String name = item['name'] ?? item['title'] ?? 'Scheduled Item';
-
-            final String start = (item['start'] ?? item['startTime'] ?? '').toString();
-            final String end = (item['end'] ?? item['endTime'] ?? '').toString();
-            
-            String formatTimeString(String raw) {
-              if (raw.contains('T') || raw.contains(' ')) {
-                try {
-                  final p = DateTime.parse(raw);
-                  return "${p.hour.toString().padLeft(2, '0')}:${p.minute.toString().padLeft(2, '0')}";
-                } catch (_) {}
-              }
-              return raw;
-            }
-
-            final String cleanStart = formatTimeString(start);
-            final String cleanEnd = formatTimeString(end);
-            final String timeDisplay = (cleanStart.isNotEmpty && cleanEnd.isNotEmpty) ? '$cleanStart - $cleanEnd' : (cleanStart.isNotEmpty ? cleanStart : 'All Day');
-
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10.0),
-              key: ValueKey(docId),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                decoration: BoxDecoration(
-                  color: isDone ? Colors.grey.shade50 : Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.02),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: CheckboxListTile(
-                  value: isDone,
-                  activeColor: Colors.deepPurple,
-                  checkboxShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                  onChanged: (val) => onToggleDone(docId, val ?? false),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  title: Text(
-                    name,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: isDone ? Colors.grey.shade400 : Colors.black87,
-                      decoration: isDone ? TextDecoration.lineThrough : null,
-                    ),
-                  ),
-                  subtitle: Padding(
-                    padding: const EdgeInsets.only(top: 4.0),
-                    child: Row(
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.access_time_rounded, size: 14, color: isDone ? Colors.grey.shade400 : Colors.deepPurple.withOpacity(0.6)),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            timeDisplay,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: isDone ? Colors.grey.shade400 : Colors.deepPurple.shade700,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                        Text(
+                          '${_getGreeting()},',
+                          style: const TextStyle(fontSize: 14, color: Colors.white70, fontWeight: FontWeight.w400),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          displayName,
+                          style: const TextStyle(fontSize: 24, color: Colors.white, fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _getFormattedDate(),
+                          style: const TextStyle(fontSize: 12, color: Colors.white54),
                         ),
                       ],
                     ),
                   ),
+                  // Avatar + action icons
+                  Column(
+                    children: [
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.settings_rounded, color: Colors.white70, size: 22),
+                            onPressed: () async {
+                              await Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                              );
+                              onRefreshProfile();
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.logout_rounded, color: Colors.white70, size: 22),
+                            onPressed: () => AuthService.signOut(),
+                          ),
+                        ],
+                      ),
+                      CircleAvatar(
+                        radius: 22,
+                        backgroundColor: Colors.white.withOpacity(0.2),
+                        child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              // Progress bar (only when tasks exist)
+              if (total > 0) ...[
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text("Today's progress", style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                    Text("$doneCount / $total done", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 7,
+                    backgroundColor: Colors.white.withOpacity(0.2),
+                    valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 24),
+
+        // ── Stat Cards ──
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            children: [
+              Expanded(
+                child: _StatCard(
+                  title: 'Tasks',
+                  value: '$todayTasks',
+                  icon: Icons.check_circle_outline_rounded,
+                  color: const Color(0xFF3B6FE8),
+                  onTap: onScheduleTap,
                 ),
               ),
-            );
-          }),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatCard(
+                  title: 'Deadlines',
+                  value: '$deadlines',
+                  icon: Icons.assignment_late_rounded,
+                  color: const Color(0xFF5C35C9),
+                  onTap: onDeadlinesTap,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatCard(
+                  title: 'Courses',
+                  value: '$courses',
+                  icon: Icons.school_rounded,
+                  color: const Color(0xFFE83B8A),
+                  onTap: onCoursesTap,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 28),
+
+        // ── Today's Schedule ──
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("Today's Schedule",
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.black87)),
+              GestureDetector(
+                onTap: onScheduleTap,
+                child: Text("See all",
+                    style: TextStyle(fontSize: 13, color: Colors.deepPurple.shade400, fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        if (scheduleList.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
+            child: Center(
+              child: Column(
+                children: [
+                  Icon(Icons.event_available_rounded, size: 48, color: Colors.grey.shade300),
+                  const SizedBox(height: 10),
+                  Text("No tasks today — enjoy your day!",
+                      style: TextStyle(color: Colors.grey.shade400, fontSize: 14)),
+                ],
+              ),
+            ),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              children: scheduleList.map((item) {
+                final String docId = item['id']?.toString() ?? UniqueKey().toString();
+                final bool isDone = completedIds.contains(docId);
+                final String name = item['name'] ?? item['title'] ?? 'Scheduled Item';
+                final String start = (item['start'] ?? item['startTime'] ?? '').toString();
+                final String end = (item['end'] ?? item['endTime'] ?? '').toString();
+
+                String fmt(String raw) {
+                  if (raw.contains('T') || raw.contains(' ')) {
+                    try {
+                      final p = DateTime.parse(raw);
+                      return "${p.hour.toString().padLeft(2, '0')}:${p.minute.toString().padLeft(2, '0')}";
+                    } catch (_) {}
+                  }
+                  return raw;
+                }
+
+                final String timeDisplay = fmt(start).isNotEmpty && fmt(end).isNotEmpty
+                    ? '${fmt(start)} – ${fmt(end)}'
+                    : fmt(start).isNotEmpty ? fmt(start) : 'All Day';
+
+                return Padding(
+                  key: ValueKey(docId),
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: GestureDetector(
+                    onTap: () => onToggleDone(docId, !isDone),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      decoration: BoxDecoration(
+                        color: isDone ? Colors.grey.shade100 : Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isDone ? Colors.grey.shade200 : Colors.deepPurple.withOpacity(0.15),
+                          width: 1,
+                        ),
+                        boxShadow: isDone ? [] : [
+                          BoxShadow(color: Colors.deepPurple.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 3)),
+                        ],
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        child: Row(
+                          children: [
+                            // Custom checkbox
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              width: 24, height: 24,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isDone ? Colors.deepPurple : Colors.transparent,
+                                border: Border.all(
+                                  color: isDone ? Colors.deepPurple : Colors.grey.shade400,
+                                  width: 2,
+                                ),
+                              ),
+                              child: isDone
+                                  ? const Icon(Icons.check, color: Colors.white, size: 14)
+                                  : null,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    name,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDone ? Colors.grey.shade400 : Colors.black87,
+                                      decoration: isDone ? TextDecoration.lineThrough : null,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Row(
+                                    children: [
+                                      Icon(Icons.access_time_rounded, size: 12,
+                                          color: isDone ? Colors.grey.shade400 : Colors.deepPurple.withOpacity(0.6)),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        timeDisplay,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: isDone ? Colors.grey.shade400 : Colors.deepPurple.shade600,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+
+        const SizedBox(height: 30),
       ],
     );
   }
 }
 
-// --- Compacted, Lower Profile Stats Card Components ---
-class _BalancedInfoCard extends StatelessWidget {
+// ─────────────────────────────────────────────
+// Stat Card
+// ─────────────────────────────────────────────
+class _StatCard extends StatelessWidget {
   final String title;
   final String value;
+  final IconData icon;
   final Color color;
+  final VoidCallback onTap;
 
-  const _BalancedInfoCard({required this.title, required this.value, required this.color});
+  const _StatCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0), // Tightened inner vertical spacing
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.025),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  title, 
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.black54),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value, 
-                  style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: color),
-                ),
-              ],
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(color: color.withOpacity(0.15), blurRadius: 12, offset: const Offset(0, 4)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color, size: 20),
             ),
-          ),
-          // Moved the color bar from bottom to side vertical pillar format for spatial efficiency
-          Container(
-            width: 3, 
-            height: 24, 
-            decoration: BoxDecoration(
-              color: color, 
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-        ],
+            const SizedBox(height: 10),
+            Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
+            const SizedBox(height: 2),
+            Text(title, style: const TextStyle(fontSize: 11, color: Colors.black45, fontWeight: FontWeight.w500)),
+          ],
+        ),
       ),
     );
   }
 }
 
-// --- Bottom Navigation View ---
+// ─────────────────────────────────────────────
+// Bottom Navigation
+// ─────────────────────────────────────────────
 class _CustomBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
@@ -495,6 +603,7 @@ class _CustomBottomNav extends StatelessWidget {
       unselectedItemColor: Colors.grey.shade400,
       selectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
       unselectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+      elevation: 12,
       items: const [
         BottomNavigationBarItem(icon: Icon(Icons.dashboard_rounded, size: 22), label: 'Overview'),
         BottomNavigationBarItem(icon: Icon(Icons.calendar_today_rounded, size: 20), label: 'Schedule'),

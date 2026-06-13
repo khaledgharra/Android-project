@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -8,7 +9,7 @@ import 'services/notification_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
-  await NotificationService.initialize();
+  if (!kIsWeb) await NotificationService.initialize();
   runApp(const DayCraftApp());
 }
 
@@ -67,8 +68,7 @@ class AuthGate extends StatelessWidget {
 
         // User is logged in
         if (snapshot.hasData) {
-          // Schedule deadline reminders in background
-          NotificationService.scheduleAllDeadlineReminders();
+          if (!kIsWeb) NotificationService.scheduleAllDeadlineReminders();
           return const HomeScreen();
         }
 

@@ -61,189 +61,274 @@ class CoursesScreenState extends State<CoursesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Courses")),
+      backgroundColor: const Color(0xFFFDFBF7),
       floatingActionButton: FloatingActionButton(
         heroTag: "courses_fab",
         onPressed: () {
           clearControllers();
-
           showAddCourseDialog();
         },
-        child: const Icon(Icons.add),
+        backgroundColor: Colors.deepPurple,
+        foregroundColor: Colors.white,
+        child: const Icon(Icons.add_rounded),
       ),
-
-      body: courses.isEmpty
-          ? const Center(child: Text("No courses yet"))
-          : ListView.builder(
-              itemCount: courses.length,
-              itemBuilder: (context, index) {
-                final course = courses[index];
-
-                return GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            CourseDetailsScreen(courseName: course["name"]),
-                      ),
-                    );
-                  },
-
-                  child: Container(
-                    margin: const EdgeInsets.all(12),
-
-                    padding: const EdgeInsets.all(16),
-
-                    decoration: BoxDecoration(
-                      color: Color(
-                        course["color"] ?? Colors.deepPurple.value,
-                      ).withOpacity(0.15),
-
-                      borderRadius: BorderRadius.circular(20),
-
-                      border: Border.all(
-                        color: Color(
-                          course["color"] ?? Colors.deepPurple.value,
-                        ).withOpacity(0.4),
-                      ),
-
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 6,
-                          offset: const Offset(0, 3),
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Header ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("My Courses",
+                            style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.black87)),
+                        const SizedBox(height: 4),
+                        Text(
+                          courses.isEmpty ? "No courses yet" : "${courses.length} course${courses.length == 1 ? '' : 's'} this semester",
+                          style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
                         ),
                       ],
                     ),
-
-                    child: ListTile(
-                      tileColor: Colors.transparent,
-                      leading: Icon(
-                        Icons.school,
-                        color: Color(
-                          course["color"] ?? Colors.deepPurple.value,
-                        ),
+                  ),
+                  if (courses.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.deepPurple.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
                       ),
+                      child: Text(
+                        "${courses.length}",
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.deepPurple),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            // ── Body ──
+            Expanded(
+              child: courses.isEmpty
+                  ? _buildEmptyState()
+                  : ListView.builder(
+                      padding: const EdgeInsets.only(bottom: 100),
+                      itemCount: courses.length,
+                      itemBuilder: (context, index) => _buildCourseCard(context, index),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-                      title: Text(course["name"] ?? ""),
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 90,
+            height: 90,
+            decoration: BoxDecoration(
+              color: Colors.deepPurple.withOpacity(0.08),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.school_rounded, size: 44, color: Colors.deepPurple),
+          ),
+          const SizedBox(height: 20),
+          const Text("No courses yet", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black87)),
+          const SizedBox(height: 8),
+          Text("Tap the button below to add your first course", style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+        ],
+      ),
+    );
+  }
 
-                      subtitle: Column(
+  Widget _buildCourseCard(BuildContext context, int index) {
+    final course = courses[index];
+    final courseColor = Color(course["color"] ?? Colors.deepPurple.value);
+    final themeIcon = _getCourseTheme(course["name"] ?? "");
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => CourseDetailsScreen(courseName: course["name"]),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: [
+            BoxShadow(color: courseColor.withOpacity(0.18), blurRadius: 16, offset: const Offset(0, 5)),
+            BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2)),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(22),
+          child: Stack(
+            children: [
+              // Gradient background
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [courseColor.withOpacity(0.13), courseColor.withOpacity(0.03)],
+                    ),
+                  ),
+                ),
+              ),
+              // Large watermark icon
+              Positioned(
+                right: -10, top: -10,
+                child: Icon(themeIcon, size: 100, color: courseColor.withOpacity(0.07)),
+              ),
+              // Left accent bar
+              Positioned(
+                left: 0, top: 0, bottom: 0,
+                child: Container(
+                  width: 5,
+                  decoration: BoxDecoration(
+                    color: courseColor,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(22),
+                      bottomLeft: Radius.circular(22),
+                    ),
+                  ),
+                ),
+              ),
+              // Content
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 8, 16),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Icon badge
+                    Container(
+                      width: 50, height: 50,
+                      decoration: BoxDecoration(
+                        color: courseColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: courseColor.withOpacity(0.2), width: 1),
+                      ),
+                      child: Icon(themeIcon, color: courseColor, size: 27),
+                    ),
+                    const SizedBox(width: 14),
+                    // Text
+                    Expanded(
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-
                         children: [
-                          if (course["lecture"] != null)
-                            Text(
-                              "Lecture: "
-                              "${course["lecture"]["day"]} "
-                              "${course["lecture"]["start"]} - "
-                              "${course["lecture"]["end"]}",
-                            ),
-
-                          if (course["tutorial"] != null)
-                            Text(
-                              "Tutorial: "
-                              "${course["tutorial"]["day"]} "
-                              "${course["tutorial"]["start"]} - "
-                              "${course["tutorial"]["end"]}",
-                            ),
-                        ],
-                      ),
-
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-
-                        children: [
-                          IconButton(
-                            icon: const Icon(
-                              Icons.assignment,
-                              color: Colors.deepPurple,
-                            ),
-
-                            onPressed: () {
-                              showAddDeadlineDialog(course);
-                            },
+                          Text(
+                            course["name"] ?? "",
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.edit, color: Colors.blue),
-
-                            onPressed: () {
-                              clearControllers();
-
-                              showEditCourseDialog(course, index);
-                            },
-                          ),
-
-                          IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red),
-
-                            onPressed: () async {
-                              final confirm = await showDialog<bool>(
-                                context: context,
-
-                                builder: (context) {
-                                  return AlertDialog(
-                                    title: const Text("Delete Course"),
-
-                                    content: Text(
-                                      "Are you sure you want to delete ${course["name"]}?",
-                                    ),
-
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () {
-                                          Navigator.pop(context, false);
-                                        },
-
-                                        child: const Text("Cancel"),
-                                      ),
-
-                                      ElevatedButton(
-                                        onPressed: () {
-                                          Navigator.pop(context, true);
-                                        },
-
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.red,
-                                        ),
-
-                                        child: const Text("Delete"),
-                                      ),
-                                    ],
-                                  );
-                                },
-                              );
-
-                              if (confirm != true) {
-                                return;
-                              }
-
-                              setState(() {
-                                courses.removeAt(index);
-                              });
-
-                              final loaded =
-                                  await StorageService.loadSchedule();
-
-                              loaded.removeWhere((item) {
-                                return item["type"] == "Course" &&
-                                    (item["name"] == course["name"] ||
-                                        item["courseName"] == course["name"]);
-                              });
-
-                              await StorageService.saveSchedule(loaded);
-                            },
-                          ),
+                          if (course["lecture"] != null) ...[
+                            const SizedBox(height: 6),
+                            _scheduleChip(
+                              icon: Icons.cast_for_education_rounded,
+                              label: "${course["lecture"]["day"]}  ${course["lecture"]["start"]} – ${course["lecture"]["end"]}",
+                              color: courseColor,
+                            ),
+                          ],
+                          if (course["tutorial"] != null) ...[
+                            const SizedBox(height: 4),
+                            _scheduleChip(
+                              icon: Icons.people_rounded,
+                              label: "${course["tutorial"]["day"]}  ${course["tutorial"]["start"]} – ${course["tutorial"]["end"]}",
+                              color: courseColor,
+                            ),
+                          ],
                         ],
                       ),
                     ),
-                  ),
-                );
-              },
-            ),
+                    // Actions
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _actionButton(Icons.assignment_rounded, Colors.deepPurple, () => showAddDeadlineDialog(course)),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _actionButton(Icons.edit_rounded, Colors.blue, () {
+                              clearControllers();
+                              showEditCourseDialog(course, index);
+                            }),
+                            _actionButton(Icons.delete_rounded, Colors.red, () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (_) => AlertDialog(
+                                  title: const Text("Delete Course"),
+                                  content: Text("Delete \"${course["name"]}\"?"),
+                                  actions: [
+                                    TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+                                    ElevatedButton(
+                                      onPressed: () => Navigator.pop(context, true),
+                                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                      child: const Text("Delete"),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (confirm != true) return;
+                              setState(() => courses.removeAt(index));
+                              final loaded = await StorageService.loadSchedule();
+                              loaded.removeWhere((item) =>
+                                item["type"] == "Course" &&
+                                (item["name"] == course["name"] || item["courseName"] == course["name"]));
+                              await StorageService.saveSchedule(loaded);
+                            }),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
+
+  Widget _scheduleChip({required IconData icon, required String label, required Color color}) {
+    return Row(
+      children: [
+        Icon(icon, size: 11, color: color.withOpacity(0.8)),
+        const SizedBox(width: 5),
+        Expanded(
+          child: Text(label,
+            style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _actionButton(IconData icon, Color color, VoidCallback onTap) {
+    return IconButton(
+      icon: Icon(icon, color: color, size: 20),
+      onPressed: onTap,
+      padding: const EdgeInsets.all(6),
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+    );
+  }
+
 
   void showAddCourseDialog() {
     showDialog(
@@ -267,51 +352,46 @@ class CoursesScreenState extends State<CoursesScreen> {
                     ),
 
                     const SizedBox(height: 20),
-                    const Text(
-                      "Choose Course Color",
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-
-                      children:
-                          [
-                            Colors.deepPurple,
-                            Colors.blue,
-                            Colors.green,
-                            Colors.orange,
-                            Colors.red,
-                          ].map((color) {
-                            final selected = selectedColor == color;
-
-                            return GestureDetector(
-                              onTap: () {
-                                setDialogState(() {
-                                  selectedColor = color;
-                                });
-                              },
-
-                              child: Container(
-                                width: 36,
-                                height: 36,
-
-                                decoration: BoxDecoration(
-                                  color: color,
-                                  shape: BoxShape.circle,
-
-                                  border: selected
-                                      ? Border.all(
-                                          color: Colors.black,
-                                          width: 3,
-                                        )
-                                      : null,
-                                ),
+                    GestureDetector(
+                      onTap: () async {
+                        final picked = await showModalBottomSheet<Color>(
+                          context: context,
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                          ),
+                          builder: (ctx) => _colorPickerSheet(ctx, selectedColor),
+                        );
+                        if (picked != null) setDialogState(() => selectedColor = picked);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: selectedColor.withOpacity(0.5), width: 1.5),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 28,
+                              height: 28,
+                              decoration: BoxDecoration(
+                                color: selectedColor,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(color: selectedColor.withOpacity(0.4), blurRadius: 6, offset: const Offset(0, 2)),
+                                ],
                               ),
-                            );
-                          }).toList(),
+                            ),
+                            const SizedBox(width: 12),
+                            const Text("Course Color", style: TextStyle(fontWeight: FontWeight.w600)),
+                            const Spacer(),
+                            const Text("Change", style: TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.w600, fontSize: 13)),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.arrow_forward_ios, size: 13, color: Colors.deepPurple),
+                          ],
+                        ),
+                      ),
                     ),
 
                     // --- LECTURE SCHEDULE ---
@@ -752,6 +832,72 @@ class CoursesScreenState extends State<CoursesScreen> {
     );
   }
 
+  Widget _colorPickerSheet(BuildContext ctx, Color current) {
+    final List<Color> colors = [
+      // Purples
+      Colors.deepPurple, Colors.purple, Colors.purpleAccent,
+      const Color(0xFF7B2FBE), const Color(0xFF9B59B6), const Color(0xFFD7BDE2),
+      // Blues
+      Colors.blue, Colors.blueAccent, Colors.lightBlue,
+      Colors.indigo, Colors.indigoAccent, const Color(0xFF2980B9),
+      // Greens
+      Colors.green, Colors.teal, Colors.tealAccent,
+      Colors.lightGreen, const Color(0xFF1ABC9C), const Color(0xFF27AE60),
+      // Reds / Pinks
+      Colors.red, Colors.redAccent, Colors.pink,
+      Colors.pinkAccent, const Color(0xFFE74C3C), const Color(0xFFC0392B),
+      // Oranges / Yellows
+      Colors.orange, Colors.orangeAccent, Colors.amber,
+      Colors.yellow, const Color(0xFFF39C12), const Color(0xFFE67E22),
+      // Neutrals / Others
+      Colors.brown, Colors.blueGrey, const Color(0xFF2C3E50),
+      const Color(0xFF7F8C8D), const Color(0xFF34495E), Colors.cyan,
+    ];
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 16),
+            const Text("Choose Color", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 20),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: colors.map((color) {
+                final isSelected = current.value == color.value;
+                return GestureDetector(
+                  onTap: () => Navigator.pop(ctx, color),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                      border: isSelected
+                          ? Border.all(color: Colors.black87, width: 3)
+                          : Border.all(color: Colors.white, width: 2),
+                      boxShadow: [
+                        BoxShadow(color: color.withOpacity(0.4), blurRadius: 6, offset: const Offset(0, 2)),
+                      ],
+                    ),
+                    child: isSelected
+                        ? const Icon(Icons.check, color: Colors.white, size: 20)
+                        : null,
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _dayPickerSheet(BuildContext ctx, List<String> days) {
     return SafeArea(
       child: Container(
@@ -772,6 +918,36 @@ class CoursesScreenState extends State<CoursesScreen> {
         ),
       ),
     );
+  }
+
+  IconData _getCourseTheme(String name) {
+    final n = name.toLowerCase();
+    if (n.contains('algorithm') || n.contains('data structure') || n.contains('complexity')) return Icons.account_tree_rounded;
+    if (n.contains('program') || n.contains('software') || n.contains('code') || n.contains('oop') || n.contains('object oriented')) return Icons.code_rounded;
+    if (n.contains('web') || n.contains('html') || n.contains('javascript') || n.contains('frontend')) return Icons.language_rounded;
+    if (n.contains('mobile') || n.contains('android') || n.contains('ios') || n.contains('flutter')) return Icons.phone_android_rounded;
+    if (n.contains('database') || n.contains('sql')) return Icons.storage_rounded;
+    if (n.contains('network') || n.contains('protocol') || n.contains('tcp') || n.contains('communication')) return Icons.wifi_rounded;
+    if (n.contains('security') || n.contains('cyber') || n.contains('crypto')) return Icons.security_rounded;
+    if (n.contains('machine learning') || n.contains('deep learning') || n.contains('neural') || n.contains('artificial intelligence')) return Icons.psychology_rounded;
+    if (n.contains('operating system') || n.contains('kernel') || n.contains(' os ') || n.contains('linux')) return Icons.computer_rounded;
+    if (n.contains('calculus') || n.contains('differential') || n.contains('integral')) return Icons.functions_rounded;
+    if (n.contains('math') || n.contains('algebra') || n.contains('linear') || n.contains('discrete') || n.contains('geometry') || n.contains('topology') || n.contains('number theory')) return Icons.calculate_rounded;
+    if (n.contains('statistic') || n.contains('probability') || n.contains('stochastic')) return Icons.bar_chart_rounded;
+    if (n.contains('physics') || n.contains('mechanic') || n.contains('quantum') || n.contains('optic') || n.contains('electro')) return Icons.science_rounded;
+    if (n.contains('chemistry') || n.contains('organic') || n.contains('biochem')) return Icons.biotech_rounded;
+    if (n.contains('biology') || n.contains('genetic') || n.contains('molecular') || n.contains('cell')) return Icons.coronavirus_rounded;
+    if (n.contains('electric') || n.contains('circuit') || n.contains('signal') || n.contains('digital system') || n.contains('analog')) return Icons.electrical_services_rounded;
+    if (n.contains('econom') || n.contains('finance') || n.contains('business') || n.contains('accounting') || n.contains('management')) return Icons.trending_up_rounded;
+    if (n.contains('english') || n.contains('language') || n.contains('literature') || n.contains('writing')) return Icons.menu_book_rounded;
+    if (n.contains('history') || n.contains('civilization')) return Icons.history_edu_rounded;
+    if (n.contains('philosoph') || n.contains('ethic') || n.contains('logic')) return Icons.lightbulb_rounded;
+    if (n.contains('engineer') || n.contains('material') || n.contains('civil') || n.contains('mechanical') || n.contains('structural')) return Icons.engineering_rounded;
+    if (n.contains('design') || n.contains('graphic') || n.contains('ui') || n.contains('ux') || n.contains('art')) return Icons.palette_rounded;
+    if (n.contains('project') || n.contains('agile') || n.contains('scrum')) return Icons.assignment_rounded;
+    if (n.contains('cloud') || n.contains('devops') || n.contains('docker') || n.contains('kubernetes')) return Icons.cloud_rounded;
+    if (n.contains('computer') || n.contains('computation')) return Icons.laptop_rounded;
+    return Icons.school_rounded;
   }
 
   void clearControllers() {
