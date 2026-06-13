@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/storage_service.dart';
 
 class TodayTimelineScreen extends StatefulWidget {
@@ -21,10 +22,10 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
   DateTime selectedDate = DateTime.now();
 
   static const double hourHeight = 80.0;
-  static const int startHour = 0;
+  int startHour = 6;
   static const int endHour = 24;
-  static const int totalHours = endHour - startHour;
-  static const double totalHeight = totalHours * hourHeight;
+  int get totalHours => endHour - startHour;
+  double get totalHeight => totalHours * hourHeight;
   static const double timeColumnWidth = 45.0;
 
   final ScrollController _scrollController = ScrollController();
@@ -35,10 +36,69 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
   @override
   void initState() {
     super.initState();
+    _loadStartHour();
     loadTodayEvents();
     _timeUpdateTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });
+  }
+
+  Future<void> _loadStartHour() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getInt('calendar_start_hour');
+    if (saved != null && mounted) setState(() => startHour = saved);
+  }
+
+  Future<void> _saveStartHour(int hour) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('calendar_start_hour', hour);
+  }
+
+  void _showStartHourPicker() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.55,
+        minChildSize: 0.35,
+        maxChildSize: 0.75,
+        builder: (ctx, scrollController) => SafeArea(
+          child: Column(
+            children: [
+              Container(width: 40, height: 4, margin: const EdgeInsets.only(top: 12, bottom: 8),
+                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 4, 20, 12),
+                child: Text("Day Start Time", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  controller: scrollController,
+                  itemCount: 13,
+                  itemBuilder: (_, i) {
+                    final label = i == 0 ? "12:00 AM (midnight)" : i < 12 ? "${i.toString().padLeft(2,'0')}:00 AM" : "12:00 PM";
+                    return ListTile(
+                      dense: true,
+                      leading: Icon(Icons.schedule_rounded, size: 18, color: i == startHour ? Colors.deepPurple : Colors.grey.shade400),
+                      title: Text(label, style: TextStyle(fontWeight: i == startHour ? FontWeight.bold : FontWeight.normal, color: i == startHour ? Colors.deepPurple : null)),
+                      trailing: i == startHour ? const Icon(Icons.check_rounded, color: Colors.deepPurple, size: 18) : null,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        setState(() => startHour = i);
+                        _saveStartHour(i);
+                        WidgetsBinding.instance.addPostFrameCallback((_) { if (_isToday) _scrollToCurrentTime(); });
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -512,6 +572,28 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
               style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
               onPressed: () async {
                 if (titleController.text.trim().isEmpty || startTime == null || endTime == null) return;
+                final dayName = _getDayName(eventDate.weekday);
+                final startStr = startTime!.format(context);
+                final endStr = endTime!.format(context);
+                if (_hasTimeOverlap(dayName, startStr, endStr)) {
+                  final proceed = await showDialog<bool>(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      title: const Text("Time Conflict"),
+                      content: const Text("This event overlaps with another item in your schedule. Add anyway?"),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text("Add Anyway"),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (proceed != true) return;
+                }
                 final dateStr = "${eventDate.year}-${eventDate.month.toString().padLeft(2, '0')}-${eventDate.day.toString().padLeft(2, '0')}";
                 final newItem = <String, dynamic>{
                   "title": titleController.text.trim(),
@@ -596,6 +678,21 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
                     Expanded(child: Center(child: Text(_getWeekRangeLabel(), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.deepPurple)))),
                     IconButton(onPressed: _goToNextWeek, icon: const Icon(Icons.chevron_right_rounded), iconSize: 24, color: Colors.grey.shade700),
                   ],
+                  GestureDetector(
+                    onTap: _showStartHourPicker,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: Colors.deepPurple.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.schedule_rounded, size: 13, color: Colors.deepPurple.shade300),
+                        const SizedBox(width: 4),
+                        Text("${startHour.toString().padLeft(2, '0')}:00", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.deepPurple.shade400)),
+                      ]),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -771,11 +868,68 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
     ]));
   }
 
+  // =================== OVERLAP LAYOUT ===================
+  // Assigns each event a column so overlapping events are shown side by side.
+  List<({Map<String, dynamic> event, int column, int totalColumns})> _computeEventLayout(List<Map<String, dynamic>> events) {
+    if (events.isEmpty) return [];
+
+    final laneEnds = <int>[]; // end-minute of last event placed in each lane
+    final cols = <int>[];
+
+    for (final event in events) {
+      final (sH, sM) = _parseTime(event["start"]!);
+      final (eH, eM) = _parseTime(event["end"]!);
+      final startMin = sH * 60 + sM;
+      final endMin = eH * 60 + eM;
+
+      int lane = -1;
+      for (int j = 0; j < laneEnds.length; j++) {
+        if (laneEnds[j] <= startMin) { lane = j; laneEnds[j] = endMin; break; }
+      }
+      if (lane == -1) { lane = laneEnds.length; laneEnds.add(endMin); }
+      cols.add(lane);
+    }
+
+    return List.generate(events.length, (i) {
+      final (sH, sM) = _parseTime(events[i]["start"]!);
+      final (eH, eM) = _parseTime(events[i]["end"]!);
+      final startMin = sH * 60 + sM;
+      final endMin = eH * 60 + eM;
+
+      int maxCol = cols[i];
+      for (int j = 0; j < events.length; j++) {
+        if (j == i) continue;
+        final (jsH, jsM) = _parseTime(events[j]["start"]!);
+        final (jeH, jeM) = _parseTime(events[j]["end"]!);
+        final jStart = jsH * 60 + jsM;
+        final jEnd = jeH * 60 + jeM;
+        if (jStart < endMin && jEnd > startMin && cols[j] > maxCol) maxCol = cols[j];
+      }
+      return (event: events[i], column: cols[i], totalColumns: maxCol + 1);
+    });
+  }
+
+  bool _hasTimeOverlap(String dayName, String startStr, String endStr) {
+    final (sH, sM) = _parseTime(startStr);
+    final (eH, eM) = _parseTime(endStr);
+    final newStart = sH * 60 + sM;
+    final newEnd = eH * 60 + eM;
+    return allSchedule.any((item) {
+      if (item["day"] != dayName || item["start"] == null || item["end"] == null) return false;
+      final (iH, iM) = _parseTime(item["start"]!);
+      final (jH, jM) = _parseTime(item["end"]!);
+      final itemStart = iH * 60 + iM;
+      final itemEnd = jH * 60 + jM;
+      return !(newEnd <= itemStart || newStart >= itemEnd);
+    });
+  }
+
   // =================== DAY VIEW ===================
   Widget _buildDayTimeline() {
     final now = DateTime.now();
     final currentMinutes = (now.hour - startHour) * 60 + now.minute;
     final currentTimeTop = currentMinutes * (hourHeight / 60);
+    final eventLayouts = _computeEventLayout(dayEvents);
 
     return SingleChildScrollView(
       controller: _scrollController,
@@ -789,38 +943,48 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
             child: Text("${hour.toString().padLeft(2, '0')}:00", style: TextStyle(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.w500), textAlign: TextAlign.center));
         }))),
         // Events area
-        Expanded(child: SizedBox(height: totalHeight, child: Stack(children: [
-          // Grid lines
-          ...List.generate(totalHours + 1, (i) => Positioned(top: i * hourHeight, left: 0, right: 0, child: Container(height: 0.5, color: Colors.grey.shade200))),
-          // Event blocks
-          ...dayEvents.map((event) {
-            final (sH, sM) = _parseTime(event["start"]!);
-            final (eH, eM) = _parseTime(event["end"]!);
-            final sMins = (sH - startHour) * 60 + sM;
-            final dur = (eH * 60 + eM) - (sH * 60 + sM);
-            final top = sMins * (hourHeight / 60);
-            final h = dur * (hourHeight / 60);
-            final color = Color(event["color"] ?? Colors.deepPurple.toARGB32());
-            return Positioned(top: top, left: 4, right: 4, child: GestureDetector(
-              onTap: () => _showEventEditSheet(event),
-              child: Container(
-                height: h < 32 ? 32 : h, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12),
-                  boxShadow: [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 6, offset: const Offset(0, 2))]),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Text(event["title"] ?? event["name"] ?? "", style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  if (h > 45) Text("${event["start"]} — ${event["end"]}", style: const TextStyle(color: Colors.white70, fontSize: 10)),
-                ]),
-              ),
-            ));
-          }),
-          // Red current time line (only today)
-          if (_isToday && currentMinutes >= 0 && currentMinutes <= totalHours * 60)
-            Positioned(top: currentTimeTop, left: 0, right: 0, child: Row(children: [
-              Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle)),
-              Expanded(child: Container(height: 1.5, color: Colors.red)),
-            ])),
-        ]))),
+        Expanded(child: LayoutBuilder(builder: (context, constraints) {
+          final availWidth = constraints.maxWidth;
+          return SizedBox(height: totalHeight, child: Stack(children: [
+            // Hour lines (solid) + half-hour lines (dashed/lighter)
+            ...List.generate(totalHours, (i) => [
+              Positioned(top: i * hourHeight, left: 0, right: 0, child: Container(height: 1, color: Colors.grey.shade300)),
+              Positioned(top: i * hourHeight + hourHeight / 2, left: 0, right: 0, child: Container(height: 0.5, color: Colors.grey.shade200)),
+            ]).expand((x) => x),
+            Positioned(top: totalHours * hourHeight, left: 0, right: 0, child: Container(height: 1, color: Colors.grey.shade300)),
+            // Event blocks with side-by-side overlap layout
+            ...eventLayouts.map((layout) {
+              final event = layout.event;
+              final (sH, sM) = _parseTime(event["start"]!);
+              final (eH, eM) = _parseTime(event["end"]!);
+              final sMins = (sH - startHour) * 60 + sM;
+              final dur = (eH * 60 + eM) - (sH * 60 + sM);
+              final top = sMins * (hourHeight / 60);
+              final h = dur * (hourHeight / 60);
+              final color = Color(event["color"] ?? Colors.deepPurple.toARGB32());
+              final colWidth = (availWidth - 8) / layout.totalColumns;
+              final left = 4.0 + layout.column * colWidth;
+              return Positioned(top: top, left: left, width: colWidth - 3, child: GestureDetector(
+                onTap: () => _showEventEditSheet(event),
+                child: Container(
+                  height: h < 32 ? 32 : h, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12),
+                    boxShadow: [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 6, offset: const Offset(0, 2))]),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Text(event["title"] ?? event["name"] ?? "", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    if (h > 45) Text("${event["start"]} — ${event["end"]}", style: const TextStyle(color: Colors.white70, fontSize: 10)),
+                  ]),
+                ),
+              ));
+            }),
+            // Red current time line (only today)
+            if (_isToday && currentMinutes >= 0 && currentMinutes <= totalHours * 60)
+              Positioned(top: currentTimeTop, left: 0, right: 0, child: Row(children: [
+                Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle)),
+                Expanded(child: Container(height: 1.5, color: Colors.red)),
+              ])),
+          ]));
+        })),
       ])),
     );
   }
@@ -856,7 +1020,10 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
           return Expanded(child: Container(
             height: headerHeight,
             decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: Colors.grey.shade300, width: 0.5)),
+              border: Border(
+                bottom: BorderSide(color: Colors.grey.shade400, width: 1),
+                left: i > 0 ? BorderSide(color: Colors.grey.shade400, width: 1) : BorderSide.none,
+              ),
             ),
             child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
               Text(weekDays[i], style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isToday ? Colors.deepPurple : Theme.of(context).colorScheme.onSurface.withOpacity(0.5))),
@@ -883,7 +1050,7 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade200, width: 0.5))),
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade400, width: 1))),
           child: Row(children: [
             SizedBox(width: timeColumnWidth),
             ...List.generate(7, (i) {
@@ -938,10 +1105,14 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
               return Expanded(child: Container(
                 height: totalHours * weekHourHeight,
                 decoration: BoxDecoration(
-                  border: Border(left: BorderSide(color: Colors.grey.shade200, width: 0.5)),
+                  border: Border(left: BorderSide(color: Colors.grey.shade400, width: 1)),
                 ),
                 child: Stack(children: [
-                  ...List.generate(totalHours + 1, (i) => Positioned(top: i * weekHourHeight, left: 0, right: 0, child: Container(height: 0.5, color: Colors.grey.shade200))),
+                  ...List.generate(totalHours, (i) => [
+                    Positioned(top: i * weekHourHeight, left: 0, right: 0, child: Container(height: 1, color: Colors.grey.shade300)),
+                    Positioned(top: i * weekHourHeight + weekHourHeight / 2, left: 0, right: 0, child: Container(height: 0.5, color: Colors.grey.shade200)),
+                  ]).expand((x) => x),
+                  Positioned(top: totalHours * weekHourHeight, left: 0, right: 0, child: Container(height: 1, color: Colors.grey.shade300)),
                   ...daySchedule.map((event) {
                     final (sH, sM) = _parseTime(event["start"]!);
                     final (eH, eM) = _parseTime(event["end"]!);

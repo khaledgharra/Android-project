@@ -265,7 +265,6 @@ class DeadlinesScreenState extends State<DeadlinesScreen> {
                             const Padding(padding: EdgeInsets.all(12), child: Text("Deadline Type", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
                             ListTile(leading: const Icon(Icons.assignment, color: Colors.orange), title: const Text("Homework"), onTap: () => Navigator.pop(ctx, "Homework")),
                             ListTile(leading: const Icon(Icons.school, color: Colors.red), title: const Text("Exam"), onTap: () => Navigator.pop(ctx, "Exam")),
-                            ListTile(leading: const Icon(Icons.quiz, color: Colors.blue), title: const Text("Quiz"), onTap: () => Navigator.pop(ctx, "Quiz")),
                           ])),
                         );
                         if (picked != null) setDialogState(() => selectedDeadlineType = picked);
@@ -356,7 +355,6 @@ class DeadlinesScreenState extends State<DeadlinesScreen> {
     switch (tabIndex) {
       case 1: return deadlines.where((d) => d["type"] == "Exam").toList();
       case 2: return deadlines.where((d) => d["type"] == "Homework").toList();
-      case 3: return deadlines.where((d) => d["type"] == "Quiz").toList();
       default: return List.from(deadlines);
     }
   }
@@ -612,7 +610,7 @@ class DeadlinesScreenState extends State<DeadlinesScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 4,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: Row(
@@ -648,7 +646,6 @@ class DeadlinesScreenState extends State<DeadlinesScreen> {
               const Tab(text: "All"),
               Tab(text: "Exams${deadlines.where((d) => d["type"] == "Exam").isNotEmpty ? ' (${deadlines.where((d) => d["type"] == "Exam").length})' : ''}"),
               Tab(text: "HW${deadlines.where((d) => d["type"] == "Homework").isNotEmpty ? ' (${deadlines.where((d) => d["type"] == "Homework").length})' : ''}"),
-              Tab(text: "Quiz${deadlines.where((d) => d["type"] == "Quiz").isNotEmpty ? ' (${deadlines.where((d) => d["type"] == "Quiz").length})' : ''}"),
             ],
           ),
         ),
@@ -662,7 +659,6 @@ class DeadlinesScreenState extends State<DeadlinesScreen> {
             _buildDeadlineList(_tabItems(0)),
             _buildDeadlineList(_tabItems(1)),
             _buildDeadlineList(_tabItems(2)),
-            _buildDeadlineList(_tabItems(3)),
           ],
         ),
       ),
@@ -780,7 +776,6 @@ class DeadlinesScreenState extends State<DeadlinesScreen> {
                             const Padding(padding: EdgeInsets.all(12), child: Text("Deadline Type", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
                             ListTile(leading: const Icon(Icons.assignment, color: Colors.orange), title: const Text("Homework"), onTap: () => Navigator.pop(ctx, "Homework")),
                             ListTile(leading: const Icon(Icons.school, color: Colors.red), title: const Text("Exam"), onTap: () => Navigator.pop(ctx, "Exam")),
-                            ListTile(leading: const Icon(Icons.quiz, color: Colors.blue), title: const Text("Quiz"), onTap: () => Navigator.pop(ctx, "Quiz")),
                           ])),
                         );
                         if (picked != null) setDialogState(() => selectedDeadlineType = picked);
@@ -845,4 +840,5 @@ class DeadlinesScreenState extends State<DeadlinesScreen> {
     isEditing = false;
     editingIndex = -1;
   }
+
 }

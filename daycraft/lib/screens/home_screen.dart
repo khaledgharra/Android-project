@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import 'deadlines_screen.dart';
 import 'courses_screen.dart';
 import 'today_timeline_screen.dart';
@@ -20,10 +21,12 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
   bool _isLoadingCounts = true;
-  int _todayTasksCount = 0;
   int _upcomingDeadlinesCount = 0;
   int _activeCoursesCount = 0;
   List<Map<String, dynamic>> _sortedTodaySchedule = [];
+
+  List<Map<String, dynamic>> _reminders = [];
+  static const String _remindersKey = 'user_reminders';
 
   Set<String> _completedItemIds = {};
   static const String _completedTasksKey = 'completed_tasks_ids';
@@ -34,9 +37,39 @@ class _HomeScreenState extends State<HomeScreen> {
 
   late final List<Widget> _screens;
 
+  Future<void> _loadReminders() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_remindersKey);
+    if (!mounted) return;
+    setState(() {
+      _reminders = raw == null ? [] : List<Map<String, dynamic>>.from(jsonDecode(raw));
+    });
+  }
+
+  Future<void> _saveReminders() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_remindersKey, jsonEncode(_reminders));
+  }
+
+  void _showRemindersSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _RemindersSheet(
+        initialReminders: List.from(_reminders),
+        onChanged: (updated) {
+          setState(() => _reminders = updated);
+          _saveReminders();
+        },
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
+    _loadReminders();
     _loadDashboardStats();
     _screens = [
       const SizedBox.shrink(),
@@ -113,7 +146,6 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) {
         setState(() {
           _upcomingDeadlinesCount = rawDeadlines.length;
-          _todayTasksCount = todayOnlyTasks.length;
           _activeCoursesCount = courses.length;
           _sortedTodaySchedule = sortedList;
           _completedItemIds = savedCompletedList.toSet();
@@ -129,7 +161,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _onTabTapped(int idx) {
     setState(() => _currentIndex = idx);
     switch (idx) {
-      case 0: _loadDashboardStats(); break;
+      case 0: _loadDashboardStats(); _loadReminders(); break;
       case 1: _calendarKey.currentState?.loadTodayEvents(); break;
       case 2: _coursesKey.currentState?.loadCourses(); break;
       case 3: _deadlinesKey.currentState?.loadDeadlines(); break;
@@ -139,7 +171,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildDashboardTab() {
     return _DashboardTabContent(
       isLoading: _isLoadingCounts,
-      todayTasks: _todayTasksCount,
+      remindersCount: _reminders.length,
       deadlines: _upcomingDeadlinesCount,
       courses: _activeCoursesCount,
       scheduleList: _sortedTodaySchedule,
@@ -148,6 +180,7 @@ class _HomeScreenState extends State<HomeScreen> {
       onDeadlinesTap: () => _onTabTapped(3),
       onCoursesTap: () => _onTabTapped(2),
       onScheduleTap: () => _onTabTapped(1),
+      onRemindersTap: _showRemindersSheet,
       onToggleDone: (id, isChecked) async {
         setState(() {
           if (isChecked) _completedItemIds.add(id);
@@ -190,7 +223,7 @@ class _HomeScreenState extends State<HomeScreen> {
 // ─────────────────────────────────────────────
 class _DashboardTabContent extends StatelessWidget {
   final bool isLoading;
-  final int todayTasks;
+  final int remindersCount;
   final int deadlines;
   final int courses;
   final List<Map<String, dynamic>> scheduleList;
@@ -199,11 +232,12 @@ class _DashboardTabContent extends StatelessWidget {
   final VoidCallback onDeadlinesTap;
   final VoidCallback onCoursesTap;
   final VoidCallback onScheduleTap;
+  final VoidCallback onRemindersTap;
   final Function(String, bool) onToggleDone;
 
   const _DashboardTabContent({
     required this.isLoading,
-    required this.todayTasks,
+    required this.remindersCount,
     required this.deadlines,
     required this.courses,
     required this.scheduleList,
@@ -212,6 +246,7 @@ class _DashboardTabContent extends StatelessWidget {
     required this.onDeadlinesTap,
     required this.onCoursesTap,
     required this.onScheduleTap,
+    required this.onRemindersTap,
     required this.onToggleDone,
   });
 
@@ -365,11 +400,11 @@ class _DashboardTabContent extends StatelessWidget {
             children: [
               Expanded(
                 child: _StatCard(
-                  title: 'Tasks',
-                  value: '$todayTasks',
-                  icon: Icons.check_circle_outline_rounded,
+                  title: 'Reminders',
+                  value: '$remindersCount',
+                  icon: Icons.notifications_rounded,
                   color: const Color(0xFF3B6FE8),
-                  onTap: onScheduleTap,
+                  onTap: onRemindersTap,
                 ),
               ),
               const SizedBox(width: 12),
@@ -593,6 +628,296 @@ class _StatCard extends StatelessWidget {
             Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
             const SizedBox(height: 2),
             Text(title, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5), fontWeight: FontWeight.w500)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// Reminders Sheet
+// ─────────────────────────────────────────────
+class _RemindersSheet extends StatefulWidget {
+  final List<Map<String, dynamic>> initialReminders;
+  final ValueChanged<List<Map<String, dynamic>>> onChanged;
+
+  const _RemindersSheet({required this.initialReminders, required this.onChanged});
+
+  @override
+  State<_RemindersSheet> createState() => _RemindersSheetState();
+}
+
+class _RemindersSheetState extends State<_RemindersSheet> {
+  late List<Map<String, dynamic>> _reminders;
+  final _textController = TextEditingController();
+  DateTime? _pickedDate;
+  TimeOfDay? _pickedTime;
+
+  @override
+  void initState() {
+    super.initState();
+    _reminders = List.from(widget.initialReminders);
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
+
+  void _addReminder() {
+    final text = _textController.text.trim();
+    if (text.isEmpty) return;
+    final reminder = <String, dynamic>{'id': DateTime.now().millisecondsSinceEpoch.toString(), 'text': text};
+    if (_pickedDate != null) reminder['date'] = '${_pickedDate!.day}/${_pickedDate!.month}/${_pickedDate!.year}';
+    if (_pickedTime != null) reminder['time'] = _pickedTime!.format(context);
+    setState(() {
+      _reminders.add(reminder);
+      _textController.clear();
+      _pickedDate = null;
+      _pickedTime = null;
+    });
+    widget.onChanged(List.from(_reminders));
+  }
+
+  void _deleteReminder(int index) {
+    setState(() => _reminders.removeAt(index));
+    widget.onChanged(List.from(_reminders));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? const Color(0xFF1A1A2E) : Colors.white;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (_, scrollController) => Container(
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            // Handle
+            const SizedBox(height: 12),
+            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 16),
+            // Header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40, height: 40,
+                    decoration: BoxDecoration(color: const Color(0xFF3B6FE8).withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.notifications_rounded, color: Color(0xFF3B6FE8), size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text('Reminders', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  if (_reminders.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(color: const Color(0xFF3B6FE8).withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                      child: Text('${_reminders.length}', style: const TextStyle(color: Color(0xFF3B6FE8), fontWeight: FontWeight.bold)),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Add input area
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _textController,
+                          decoration: InputDecoration(
+                            hintText: "What do you need to remember?",
+                            hintStyle: TextStyle(fontSize: 14, color: Colors.grey.shade400),
+                            filled: true,
+                            fillColor: isDark ? Colors.grey.shade800 : Colors.grey.shade50,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                          ),
+                          onSubmitted: (_) => _addReminder(),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      GestureDetector(
+                        onTap: _addReminder,
+                        child: Container(
+                          width: 48, height: 48,
+                          decoration: BoxDecoration(color: const Color(0xFF3B6FE8), borderRadius: BorderRadius.circular(14)),
+                          child: const Icon(Icons.add_rounded, color: Colors.white, size: 26),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  // Optional date + time chips
+                  Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () async {
+                          final d = await showDatePicker(
+                            context: context, initialDate: _pickedDate ?? DateTime.now(),
+                            firstDate: DateTime(2020), lastDate: DateTime(2030),
+                          );
+                          if (d != null) setState(() => _pickedDate = d);
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: _pickedDate != null ? const Color(0xFF3B6FE8).withOpacity(0.12) : (isDark ? Colors.grey.shade800 : Colors.grey.shade100),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: _pickedDate != null ? const Color(0xFF3B6FE8).withOpacity(0.4) : Colors.transparent),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(Icons.calendar_today_rounded, size: 13, color: _pickedDate != null ? const Color(0xFF3B6FE8) : Colors.grey),
+                            const SizedBox(width: 6),
+                            Text(
+                              _pickedDate != null ? '${_pickedDate!.day}/${_pickedDate!.month}/${_pickedDate!.year}' : 'Date (optional)',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: _pickedDate != null ? const Color(0xFF3B6FE8) : Colors.grey),
+                            ),
+                            if (_pickedDate != null) ...[
+                              const SizedBox(width: 6),
+                              GestureDetector(onTap: () => setState(() => _pickedDate = null), child: const Icon(Icons.close_rounded, size: 13, color: Color(0xFF3B6FE8))),
+                            ],
+                          ]),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () async {
+                          final t = await showTimePicker(
+                            context: context, initialTime: _pickedTime ?? TimeOfDay.now(),
+                            initialEntryMode: TimePickerEntryMode.inputOnly,
+                          );
+                          if (t != null) setState(() => _pickedTime = t);
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: _pickedTime != null ? const Color(0xFF3B6FE8).withOpacity(0.12) : (isDark ? Colors.grey.shade800 : Colors.grey.shade100),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: _pickedTime != null ? const Color(0xFF3B6FE8).withOpacity(0.4) : Colors.transparent),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(Icons.access_time_rounded, size: 13, color: _pickedTime != null ? const Color(0xFF3B6FE8) : Colors.grey),
+                            const SizedBox(width: 6),
+                            Text(
+                              _pickedTime != null ? _pickedTime!.format(context) : 'Time (optional)',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: _pickedTime != null ? const Color(0xFF3B6FE8) : Colors.grey),
+                            ),
+                            if (_pickedTime != null) ...[
+                              const SizedBox(width: 6),
+                              GestureDetector(onTap: () => setState(() => _pickedTime = null), child: const Icon(Icons.close_rounded, size: 13, color: Color(0xFF3B6FE8))),
+                            ],
+                          ]),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Divider(height: 1, color: Colors.grey.shade200),
+            // List
+            Expanded(
+              child: _reminders.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.notifications_none_rounded, size: 56, color: Colors.grey.shade300),
+                          const SizedBox(height: 12),
+                          Text('No reminders yet', style: TextStyle(fontSize: 16, color: Colors.grey.shade400, fontWeight: FontWeight.w500)),
+                          const SizedBox(height: 4),
+                          Text('Type above to add one', style: TextStyle(fontSize: 13, color: Colors.grey.shade300)),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      controller: scrollController,
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                      itemCount: _reminders.length,
+                      itemBuilder: (_, i) {
+                        final r = _reminders[i];
+                        final hasDate = r['date'] != null && r['date'].toString().isNotEmpty;
+                        final hasTime = r['time'] != null && r['time'].toString().isNotEmpty;
+                        return Dismissible(
+                          key: ValueKey(r['id'] ?? i),
+                          direction: DismissDirection.endToStart,
+                          background: Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.only(right: 20),
+                            decoration: BoxDecoration(color: Colors.red.shade400, borderRadius: BorderRadius.circular(16)),
+                            child: const Icon(Icons.delete_rounded, color: Colors.white),
+                          ),
+                          onDismissed: (_) => _deleteReminder(i),
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.grey.shade800 : Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0xFF3B6FE8).withOpacity(0.1)),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 8, height: 8,
+                                  decoration: const BoxDecoration(color: Color(0xFF3B6FE8), shape: BoxShape.circle),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(r['text'] ?? '', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                                      if (hasDate || hasTime) ...[
+                                        const SizedBox(height: 4),
+                                        Row(children: [
+                                          if (hasDate) ...[
+                                            Icon(Icons.calendar_today_rounded, size: 11, color: Colors.grey.shade500),
+                                            const SizedBox(width: 4),
+                                            Text(r['date'], style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                                            const SizedBox(width: 8),
+                                          ],
+                                          if (hasTime) ...[
+                                            Icon(Icons.access_time_rounded, size: 11, color: Colors.grey.shade500),
+                                            const SizedBox(width: 4),
+                                            Text(r['time'], style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                                          ],
+                                        ]),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onTap: () => _deleteReminder(i),
+                                  child: Icon(Icons.close_rounded, size: 18, color: Colors.grey.shade400),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
           ],
         ),
       ),

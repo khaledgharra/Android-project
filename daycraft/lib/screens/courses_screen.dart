@@ -583,7 +583,6 @@ class CoursesScreenState extends State<CoursesScreen> {
                             const Padding(padding: EdgeInsets.all(12), child: Text("Deadline Type", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
                             ListTile(leading: const Icon(Icons.assignment, color: Colors.orange), title: const Text("Homework"), onTap: () => Navigator.pop(ctx, "Homework")),
                             ListTile(leading: const Icon(Icons.school, color: Colors.red), title: const Text("Exam"), onTap: () => Navigator.pop(ctx, "Exam")),
-                            ListTile(leading: const Icon(Icons.quiz, color: Colors.blue), title: const Text("Quiz"), onTap: () => Navigator.pop(ctx, "Quiz")),
                           ])),
                         );
                         if (picked != null) setDialogState(() => selectedDeadlineType = picked);
@@ -751,15 +750,45 @@ class CoursesScreenState extends State<CoursesScreen> {
       if (course["lecture"] != null) {
         final lecture = course["lecture"] as Map<String, dynamic>;
         if (overlaps(lecture["day"], lecture["start"], lecture["end"])) {
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Lecture overlaps with another schedule item")));
-          return;
+          final proceed = await showDialog<bool>(
+            context: context,
+            builder: (_) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Text("Time Conflict"),
+              content: Text("Lecture (${lecture["day"]}  ${lecture["start"]} – ${lecture["end"]}) overlaps with another schedule item."),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text("Add Anyway"),
+                ),
+              ],
+            ),
+          );
+          if (proceed != true) return;
         }
       }
       if (course["tutorial"] != null) {
         final tutorial = course["tutorial"] as Map<String, dynamic>;
         if (overlaps(tutorial["day"], tutorial["start"], tutorial["end"])) {
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Tutorial overlaps with another schedule item")));
-          return;
+          final proceed = await showDialog<bool>(
+            context: context,
+            builder: (_) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Text("Time Conflict"),
+              content: Text("Tutorial (${tutorial["day"]}  ${tutorial["start"]} – ${tutorial["end"]}) overlaps with another schedule item."),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text("Add Anyway"),
+                ),
+              ],
+            ),
+          );
+          if (proceed != true) return;
         }
       }
 
