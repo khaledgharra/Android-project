@@ -247,7 +247,7 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
   Widget _editOption(IconData icon, String label, VoidCallback onTap, {Color? color}) {
     return ListTile(
       leading: Icon(icon, color: color ?? Colors.grey.shade700, size: 22),
-      title: Text(label, style: TextStyle(fontWeight: FontWeight.w500, color: color ?? Colors.black87)),
+      title: Text(label, style: TextStyle(fontWeight: FontWeight.w500, color: color ?? Theme.of(context).colorScheme.onSurface)),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       tileColor: Colors.transparent,
       onTap: onTap,
@@ -261,7 +261,7 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: const Text("Edit Name"),
       content: TextField(controller: controller, autofocus: true,
-        decoration: InputDecoration(filled: true, fillColor: Colors.grey.shade50, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none))),
+        decoration: InputDecoration(filled: true, fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none))),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
         ElevatedButton(
@@ -449,7 +449,7 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.deepPurple.shade200)),
+                  decoration: BoxDecoration(color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.deepPurple.shade200)),
                   child: Row(children: [
                     const Icon(Icons.calendar_today, size: 16, color: Colors.deepPurple),
                     const SizedBox(width: 10),
@@ -467,7 +467,7 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: repeatMode == "weekly" ? Colors.deepPurple.shade200 : Colors.grey.shade200)),
+                  decoration: BoxDecoration(color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: repeatMode == "weekly" ? Colors.deepPurple.shade200 : Colors.grey.shade200)),
                   child: Row(children: [
                     Icon(Icons.repeat_rounded, size: 16, color: repeatMode == "weekly" ? Colors.deepPurple : Colors.grey),
                     const SizedBox(width: 10),
@@ -489,7 +489,7 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                  decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: (startTime != null && endTime != null) ? Colors.deepPurple.shade200 : Colors.grey.shade200)),
+                  decoration: BoxDecoration(color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: (startTime != null && endTime != null) ? Colors.deepPurple.shade200 : Colors.grey.shade200)),
                   child: Row(children: [
                     Icon(Icons.schedule_rounded, size: 18, color: startTime != null ? Colors.deepPurple : Colors.grey),
                     const SizedBox(width: 10),
@@ -499,7 +499,7 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
                           : startTime != null
                               ? "${startTime!.format(context)}  →  End?"
                               : "Set time...",
-                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: startTime != null ? Colors.black87 : Colors.grey),
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: startTime != null ? Theme.of(context).colorScheme.onSurface : Colors.grey),
                     ),
                   ]),
                 ),
@@ -543,7 +543,6 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
     final months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFDFBF7),
       floatingActionButton: FloatingActionButton(
         heroTag: "calendar_fab",
         backgroundColor: Colors.deepPurple,
@@ -581,11 +580,11 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
                       child: GestureDetector(
                         onTap: _isToday ? null : _goToToday,
                         child: Column(children: [
-                          Text(dayName, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _isToday ? Colors.deepPurple : Colors.grey.shade700)),
+                          Text(dayName, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _isToday ? Colors.deepPurple : Theme.of(context).colorScheme.onSurface.withOpacity(0.7))),
                           Container(
                             width: 36, height: 36,
                             decoration: BoxDecoration(shape: BoxShape.circle, color: _isToday ? Colors.deepPurple : Colors.transparent),
-                            child: Center(child: Text("${selectedDate.day}", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _isToday ? Colors.white : Colors.grey.shade800))),
+                            child: Center(child: Text("${selectedDate.day}", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _isToday ? Colors.white : Theme.of(context).colorScheme.onSurface))),
                           ),
                           Text("${months[selectedDate.month - 1]} ${selectedDate.year}", style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
                         ]),
@@ -709,7 +708,7 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: const Text("Edit Deadline Name"),
       content: TextField(controller: controller, autofocus: true,
-        decoration: InputDecoration(filled: true, fillColor: Colors.grey.shade50, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none))),
+        decoration: InputDecoration(filled: true, fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none))),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
         ElevatedButton(
@@ -860,14 +859,14 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
               border: Border(bottom: BorderSide(color: Colors.grey.shade300, width: 0.5)),
             ),
             child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Text(weekDays[i], style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isToday ? Colors.deepPurple : Colors.grey.shade600)),
+              Text(weekDays[i], style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isToday ? Colors.deepPurple : Theme.of(context).colorScheme.onSurface.withOpacity(0.5))),
               Container(
                 width: 24, height: 24,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: isToday ? Colors.deepPurple : Colors.transparent,
                 ),
-                child: Center(child: Text("${date.day}", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isToday ? Colors.white : Colors.grey.shade500))),
+                child: Center(child: Text("${date.day}", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isToday ? Colors.white : Theme.of(context).colorScheme.onSurface.withOpacity(0.6)))),
               ),
               if (hasDeadline)
                 Container(margin: const EdgeInsets.only(top: 2), width: 6, height: 6, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle)),

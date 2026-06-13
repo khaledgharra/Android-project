@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'deadlines_screen.dart';
 import 'courses_screen.dart';
 import 'today_timeline_screen.dart';
 import 'settings_screen.dart';
+import 'login_screen.dart';
 import '../services/auth_service.dart';
 import '../services/storage_service.dart';
 
@@ -164,7 +166,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F3F8),
       body: SafeArea(
         child: IndexedStack(
           index: _currentIndex,
@@ -235,6 +236,9 @@ class _DashboardTabContent extends StatelessWidget {
       return const Center(child: CircularProgressIndicator(color: Colors.deepPurple));
     }
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = Theme.of(context).cardColor;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     final user = AuthService.currentUser;
     final displayName = user?.displayName?.isNotEmpty == true
         ? user!.displayName!
@@ -306,7 +310,15 @@ class _DashboardTabContent extends StatelessWidget {
                           ),
                           IconButton(
                             icon: const Icon(Icons.logout_rounded, color: Colors.white70, size: 22),
-                            onPressed: () => AuthService.signOut(),
+                            onPressed: () async {
+                              await AuthService.signOut();
+                              if (context.mounted) {
+                                Navigator.of(context).pushAndRemoveUntil(
+                                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                                  (route) => false,
+                                );
+                              }
+                            },
                           ),
                         ],
                       ),
@@ -392,8 +404,8 @@ class _DashboardTabContent extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("Today's Schedule",
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.black87)),
+              Text("Today's Schedule",
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: onSurface)),
               GestureDetector(
                 onTap: onScheduleTap,
                 child: Text("See all",
@@ -447,14 +459,19 @@ class _DashboardTabContent extends StatelessWidget {
                   key: ValueKey(docId),
                   padding: const EdgeInsets.only(bottom: 10),
                   child: GestureDetector(
-                    onTap: () => onToggleDone(docId, !isDone),
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      onToggleDone(docId, !isDone);
+                    },
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       decoration: BoxDecoration(
-                        color: isDone ? Colors.grey.shade100 : Colors.white,
+                        color: isDone
+                            ? (isDark ? Colors.grey.shade800 : Colors.grey.shade100)
+                            : cardBg,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: isDone ? Colors.grey.shade200 : Colors.deepPurple.withOpacity(0.15),
+                          color: isDone ? Colors.grey.shade700.withOpacity(0.4) : Colors.deepPurple.withOpacity(0.15),
                           width: 1,
                         ),
                         boxShadow: isDone ? [] : [
@@ -491,7 +508,7 @@ class _DashboardTabContent extends StatelessWidget {
                                     style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
-                                      color: isDone ? Colors.grey.shade400 : Colors.black87,
+                                      color: isDone ? Colors.grey.shade500 : onSurface,
                                       decoration: isDone ? TextDecoration.lineThrough : null,
                                     ),
                                   ),
@@ -555,7 +572,7 @@ class _StatCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(color: color.withOpacity(0.15), blurRadius: 12, offset: const Offset(0, 4)),
@@ -575,7 +592,7 @@ class _StatCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
             const SizedBox(height: 2),
-            Text(title, style: const TextStyle(fontSize: 11, color: Colors.black45, fontWeight: FontWeight.w500)),
+            Text(title, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5), fontWeight: FontWeight.w500)),
           ],
         ),
       ),
@@ -584,32 +601,112 @@ class _StatCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────
-// Bottom Navigation
+// Animated Bottom Navigation
 // ─────────────────────────────────────────────
-class _CustomBottomNav extends StatelessWidget {
+class _CustomBottomNav extends StatefulWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
 
   const _CustomBottomNav({required this.currentIndex, required this.onTap});
 
   @override
+  State<_CustomBottomNav> createState() => _CustomBottomNavState();
+}
+
+class _CustomBottomNavState extends State<_CustomBottomNav> with TickerProviderStateMixin {
+  static const _tabs = [
+    (icon: Icons.dashboard_rounded, label: 'Overview'),
+    (icon: Icons.calendar_today_rounded, label: 'Schedule'),
+    (icon: Icons.school_rounded, label: 'Courses'),
+    (icon: Icons.assignment_rounded, label: 'Deadlines'),
+  ];
+
+  late final List<AnimationController> _controllers;
+  late final List<Animation<double>> _scales;
+
+  @override
+  void initState() {
+    super.initState();
+    _controllers = List.generate(_tabs.length, (i) =>
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 200), value: i == widget.currentIndex ? 1.0 : 0.0));
+    _scales = _controllers.map((c) =>
+      Tween<double>(begin: 1.0, end: 1.25).animate(CurvedAnimation(parent: c, curve: Curves.easeOutBack))).toList();
+  }
+
+  @override
+  void didUpdateWidget(_CustomBottomNav old) {
+    super.didUpdateWidget(old);
+    if (old.currentIndex != widget.currentIndex) {
+      _controllers[old.currentIndex].reverse();
+      _controllers[widget.currentIndex].forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final c in _controllers) c.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return BottomNavigationBar(
-      currentIndex: currentIndex,
-      onTap: onTap,
-      type: BottomNavigationBarType.fixed,
-      backgroundColor: Colors.white,
-      selectedItemColor: Colors.deepPurple,
-      unselectedItemColor: Colors.grey.shade400,
-      selectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-      unselectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
-      elevation: 12,
-      items: const [
-        BottomNavigationBarItem(icon: Icon(Icons.dashboard_rounded, size: 22), label: 'Overview'),
-        BottomNavigationBarItem(icon: Icon(Icons.calendar_today_rounded, size: 20), label: 'Schedule'),
-        BottomNavigationBarItem(icon: Icon(Icons.school_rounded, size: 22), label: 'Courses'),
-        BottomNavigationBarItem(icon: Icon(Icons.assignment_rounded, size: 22), label: 'Deadlines'),
-      ],
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? const Color(0xFF1A1A2E) : Colors.white;
+    final textColor = isDark ? Colors.white70 : Colors.grey.shade500;
+
+    return Container(
+      height: 72,
+      decoration: BoxDecoration(
+        color: bg,
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.07), blurRadius: 16, offset: const Offset(0, -4))],
+      ),
+      child: Row(
+        children: List.generate(_tabs.length, (i) {
+          final selected = widget.currentIndex == i;
+          final tab = _tabs[i];
+          return Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                widget.onTap(i);
+              },
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ScaleTransition(
+                    scale: _scales[i],
+                    child: Icon(
+                      tab.icon,
+                      size: 22,
+                      color: selected ? Colors.deepPurple : textColor,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    tab.label,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      color: selected ? Colors.deepPurple : textColor,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: selected ? 18 : 0,
+                    height: 3,
+                    decoration: BoxDecoration(
+                      color: Colors.deepPurple,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+      ),
     );
   }
 }

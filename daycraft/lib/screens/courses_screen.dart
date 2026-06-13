@@ -11,6 +11,7 @@ class CoursesScreen extends StatefulWidget {
 
 class CoursesScreenState extends State<CoursesScreen> {
   final deadlineTitleController = TextEditingController();
+  final deadlineEstimatedHoursController = TextEditingController();
 
   DateTime? selectedDeadlineDate;
 
@@ -20,6 +21,8 @@ class CoursesScreenState extends State<CoursesScreen> {
   Color selectedColor = Colors.deepPurple;
   bool isEditing = false;
   int editingIndex = -1;
+
+  bool _isSavingCourse = false;
 
   String lectureDay = "Sunday";
   TimeOfDay? lectureStart;
@@ -61,7 +64,6 @@ class CoursesScreenState extends State<CoursesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFDFBF7),
       floatingActionButton: FloatingActionButton(
         heroTag: "courses_fab",
         onPressed: () {
@@ -86,8 +88,8 @@ class CoursesScreenState extends State<CoursesScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text("My Courses",
-                            style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.black87)),
+                        Text("My Courses",
+                            style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
                         const SizedBox(height: 4),
                         Text(
                           courses.isEmpty ? "No courses yet" : "${courses.length} course${courses.length == 1 ? '' : 's'} this semester",
@@ -143,7 +145,7 @@ class CoursesScreenState extends State<CoursesScreen> {
             child: const Icon(Icons.school_rounded, size: 44, color: Colors.deepPurple),
           ),
           const SizedBox(height: 20),
-          const Text("No courses yet", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black87)),
+          Text("No courses yet", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface)),
           const SizedBox(height: 8),
           Text("Tap the button below to add your first course", style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
         ],
@@ -168,7 +170,7 @@ class CoursesScreenState extends State<CoursesScreen> {
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(22),
           boxShadow: [
             BoxShadow(color: courseColor.withOpacity(0.18), blurRadius: 16, offset: const Offset(0, 5)),
@@ -234,7 +236,7 @@ class CoursesScreenState extends State<CoursesScreen> {
                         children: [
                           Text(
                             course["name"] ?? "",
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
                           ),
                           if (course["lecture"] != null) ...[
                             const SizedBox(height: 6),
@@ -285,11 +287,19 @@ class CoursesScreenState extends State<CoursesScreen> {
                               );
                               if (confirm != true) return;
                               setState(() => courses.removeAt(index));
+                              // Delete schedule items for this course
                               final loaded = await StorageService.loadSchedule();
                               loaded.removeWhere((item) =>
                                 item["type"] == "Course" &&
                                 (item["name"] == course["name"] || item["courseName"] == course["name"]));
                               await StorageService.saveSchedule(loaded);
+                              // Delete all deadlines belonging to this course
+                              final deadlines = await StorageService.loadDeadlines();
+                              for (final d in deadlines) {
+                                if (d["course"] == course["name"] && d["id"] != null) {
+                                  await StorageService.deleteDeadline(d["id"]);
+                                }
+                              }
                             }),
                           ],
                         ),
@@ -366,7 +376,7 @@ class CoursesScreenState extends State<CoursesScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade50,
+                          color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: selectedColor.withOpacity(0.5), width: 1.5),
                         ),
@@ -398,9 +408,9 @@ class CoursesScreenState extends State<CoursesScreen> {
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
+                        color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.grey.shade200),
+                        border: Border.all(color: Colors.grey.shade700.withOpacity(0.3)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -409,6 +419,7 @@ class CoursesScreenState extends State<CoursesScreen> {
                           const SizedBox(height: 10),
                           // Day row
                           _timeFieldRow(
+                            context: context,
                             icon: Icons.calendar_today,
                             label: "Day",
                             value: lectureDay,
@@ -423,6 +434,7 @@ class CoursesScreenState extends State<CoursesScreen> {
                           const Divider(height: 16),
                           // Time row — single tap chains start → end
                           _timeFieldRow(
+                            context: context,
                             icon: Icons.schedule_rounded,
                             label: "Time",
                             value: lectureStart != null && lectureEnd != null
@@ -446,9 +458,9 @@ class CoursesScreenState extends State<CoursesScreen> {
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
+                        color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.grey.shade200),
+                        border: Border.all(color: Colors.grey.shade700.withOpacity(0.3)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -456,6 +468,7 @@ class CoursesScreenState extends State<CoursesScreen> {
                           const Text("Tutorial (Optional)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.teal)),
                           const SizedBox(height: 10),
                           _timeFieldRow(
+                            context: context,
                             icon: Icons.calendar_today,
                             label: "Day",
                             value: tutorialDay,
@@ -469,6 +482,7 @@ class CoursesScreenState extends State<CoursesScreen> {
                           ),
                           const Divider(height: 16),
                           _timeFieldRow(
+                            context: context,
                             icon: Icons.schedule_rounded,
                             label: "Time",
                             value: tutorialStart != null && tutorialEnd != null
@@ -555,7 +569,7 @@ class CoursesScreenState extends State<CoursesScreen> {
                       autofocus: true,
                       decoration: InputDecoration(
                         hintText: "Assignment / Exam...",
-                        filled: true, fillColor: Colors.grey.shade50,
+                        filled: true, fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50,
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                       ),
                     ),
@@ -576,7 +590,7 @@ class CoursesScreenState extends State<CoursesScreen> {
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+                        decoration: BoxDecoration(color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade700.withOpacity(0.3))),
                         child: Row(children: [
                           const Icon(Icons.category_rounded, size: 16, color: Colors.deepPurple),
                           const SizedBox(width: 10),
@@ -598,8 +612,8 @@ class CoursesScreenState extends State<CoursesScreen> {
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                        decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: selectedDeadlineDate != null ? Colors.deepPurple.shade200 : Colors.grey.shade200)),
+                        decoration: BoxDecoration(color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50, borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: selectedDeadlineDate != null ? Colors.deepPurple.shade200 : Colors.grey.shade600.withOpacity(0.3))),
                         child: Row(children: [
                           Icon(Icons.event_rounded, size: 18, color: selectedDeadlineDate != null ? Colors.deepPurple : Colors.grey),
                           const SizedBox(width: 10),
@@ -607,16 +621,26 @@ class CoursesScreenState extends State<CoursesScreen> {
                             selectedDeadlineDate != null
                                 ? "${selectedDeadlineDate!.day}/${selectedDeadlineDate!.month}/${selectedDeadlineDate!.year}"
                                 : "Set due date...",
-                            style: TextStyle(fontWeight: FontWeight.w600, color: selectedDeadlineDate != null ? Colors.black87 : Colors.grey),
+                            style: TextStyle(fontWeight: FontWeight.w600, color: selectedDeadlineDate != null ? Theme.of(context).colorScheme.onSurface : Colors.grey),
                           ),
                         ]),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: deadlineEstimatedHoursController,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: "Estimated Study Hours",
+                        filled: true, fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                       ),
                     ),
                   ],
                 ),
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+                TextButton(onPressed: () { deadlineTitleController.clear(); deadlineEstimatedHoursController.clear(); Navigator.pop(context); }, child: const Text("Cancel")),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                   onPressed: () async {
@@ -624,15 +648,16 @@ class CoursesScreenState extends State<CoursesScreen> {
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please choose a date and title")));
                       return;
                     }
-                    final deadlines = await StorageService.loadDeadlines();
-                    deadlines.add({
+                    final newDeadline = {
                       "title": deadlineTitleController.text,
                       "course": course["name"],
                       "type": selectedDeadlineType,
                       "date": selectedDeadlineDate!.toString().split(" ")[0],
-                    });
-                    await StorageService.saveDeadlines(deadlines);
+                      "estimatedHours": deadlineEstimatedHoursController.text,
+                    };
+                    await StorageService.addDeadline(newDeadline);
                     deadlineTitleController.clear();
+                    deadlineEstimatedHoursController.clear();
                     selectedDeadlineDate = null;
                     selectedDeadlineType = "Homework";
                     Navigator.pop(context);
@@ -676,144 +701,122 @@ class CoursesScreenState extends State<CoursesScreen> {
   }
 
   Future<void> addCourse() async {
-    if (courseNameController.text.trim().isEmpty) {
-      return;
-    }
-    final loadedSchedule = await StorageService.loadSchedule();
-    bool overlaps(String day, String start, String end) {
-      final startTime = parseTime(start);
+    if (_isSavingCourse) return;
+    if (courseNameController.text.trim().isEmpty) return;
 
-      final endTime = parseTime(end);
+    _isSavingCourse = true;
 
-      final newStart = startTime.hour * 60 + startTime.minute;
+    try {
+      final loadedSchedule = await StorageService.loadSchedule();
 
-      final newEnd = endTime.hour * 60 + endTime.minute;
+      bool overlaps(String day, String start, String end) {
+        final startTime = parseTime(start);
+        final endTime = parseTime(end);
+        final newStart = startTime.hour * 60 + startTime.minute;
+        final newEnd = endTime.hour * 60 + endTime.minute;
+        return loadedSchedule.any((item) {
+          if (item["day"] != day || item["start"] == null || item["end"] == null) return false;
+          final existingStart = parseTime(item["start"]);
+          final existingEnd = parseTime(item["end"]);
+          final existingStartMin = existingStart.hour * 60 + existingStart.minute;
+          final existingEndMin = existingEnd.hour * 60 + existingEnd.minute;
+          return !(newEnd <= existingStartMin || newStart >= existingEndMin);
+        });
+      }
 
-      return loadedSchedule.any((item) {
-        if (item["day"] != day ||
-            item["start"] == null ||
-            item["end"] == null) {
-          return false;
+      String? oldCourseName;
+      int? removingIndex;
+
+      if (isEditing) {
+        oldCourseName = courses[editingIndex]["name"];
+        removingIndex = editingIndex;
+        loadedSchedule.removeWhere((item) =>
+            item["type"] == "Course" &&
+            (item["name"] == oldCourseName || item["courseName"] == oldCourseName));
+      }
+
+      final course = {
+        "name": courseNameController.text,
+        "type": "Course",
+        "color": selectedColor.value,
+        "lecture": lectureStart != null && lectureEnd != null
+            ? {"day": lectureDay, "start": lectureStart!.format(context), "end": lectureEnd!.format(context)}
+            : null,
+        "tutorial": tutorialStart != null && tutorialEnd != null
+            ? {"day": tutorialDay, "start": tutorialStart!.format(context), "end": tutorialEnd!.format(context)}
+            : null,
+      };
+
+      // Validate overlaps BEFORE modifying anything
+      if (course["lecture"] != null) {
+        final lecture = course["lecture"] as Map<String, dynamic>;
+        if (overlaps(lecture["day"], lecture["start"], lecture["end"])) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Lecture overlaps with another schedule item")));
+          return;
         }
-
-        final existingStart = parseTime(item["start"]);
-
-        final existingEnd = parseTime(item["end"]);
-
-        final existingStartMinutes =
-            existingStart.hour * 60 + existingStart.minute;
-
-        final existingEndMinutes = existingEnd.hour * 60 + existingEnd.minute;
-
-        return !(newEnd <= existingStartMinutes ||
-            newStart >= existingEndMinutes);
-      });
-    }
-
-    if (isEditing) {
-      final oldCourseName = courses[editingIndex]["name"];
-
-      loadedSchedule.removeWhere((item) {
-        return item["type"] == "Course" &&
-            (item["name"] == oldCourseName ||
-                item["courseName"] == oldCourseName);
-      });
-
-      courses.removeAt(editingIndex);
-    }
-
-    final course = {
-      "name": courseNameController.text,
-      "type": "Course",
-      "color": selectedColor.value,
-
-      "lecture": lectureStart != null && lectureEnd != null
-          ? {
-              "day": lectureDay,
-              "start": lectureStart!.format(context),
-              "end": lectureEnd!.format(context),
-            }
-          : null,
-
-      "tutorial": tutorialStart != null && tutorialEnd != null
-          ? {
-              "day": tutorialDay,
-              "start": tutorialStart!.format(context),
-              "end": tutorialEnd!.format(context),
-            }
-          : null,
-    };
-
-    loadedSchedule.add(course);
-
-    if (course["lecture"] != null) {
-      final lecture = course["lecture"] as Map<String, dynamic>;
-
-      if (overlaps(lecture["day"], lecture["start"], lecture["end"])) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Lecture overlaps with another schedule item"),
-          ),
-        );
-
-        return;
+      }
+      if (course["tutorial"] != null) {
+        final tutorial = course["tutorial"] as Map<String, dynamic>;
+        if (overlaps(tutorial["day"], tutorial["start"], tutorial["end"])) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Tutorial overlaps with another schedule item")));
+          return;
+        }
       }
 
-      loadedSchedule.add({
-        "title": "${course["name"]} Lecture",
-        "type": "Course",
-        "courseName": course["name"],
-        "day": lecture["day"],
-        "start": lecture["start"],
-        "end": lecture["end"],
-        "color": course["color"],
-      });
-    }
+      // All good — build the final schedule list
+      loadedSchedule.add(course);
 
-    if (course["tutorial"] != null) {
-      final tutorial = course["tutorial"] as Map<String, dynamic>;
-
-      if (overlaps(tutorial["day"], tutorial["start"], tutorial["end"])) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Tutorial overlaps with another schedule item"),
-          ),
-        );
-
-        return;
+      if (course["lecture"] != null) {
+        final lecture = course["lecture"] as Map<String, dynamic>;
+        loadedSchedule.add({
+          "title": "${course["name"]} Lecture",
+          "type": "Course",
+          "courseName": course["name"],
+          "day": lecture["day"],
+          "start": lecture["start"],
+          "end": lecture["end"],
+          "color": course["color"],
+        });
       }
 
-      loadedSchedule.add({
-        "title": "${course["name"]} Tutorial",
-        "type": "Course",
-        "courseName": course["name"],
-        "day": tutorial["day"],
-        "start": tutorial["start"],
-        "end": tutorial["end"],
-        "color": course["color"],
+      if (course["tutorial"] != null) {
+        final tutorial = course["tutorial"] as Map<String, dynamic>;
+        loadedSchedule.add({
+          "title": "${course["name"]} Tutorial",
+          "type": "Course",
+          "courseName": course["name"],
+          "day": tutorial["day"],
+          "start": tutorial["start"],
+          "end": tutorial["end"],
+          "color": course["color"],
+        });
+      }
+
+      await StorageService.saveSchedule(loadedSchedule);
+
+      if (!mounted) return;
+      setState(() {
+        if (removingIndex != null) courses.removeAt(removingIndex);
+        courses.add(course);
       });
+
+      Navigator.pop(context);
+      clearControllers();
+    } finally {
+      _isSavingCourse = false;
     }
-
-    await StorageService.saveSchedule(loadedSchedule);
-
-    setState(() {
-      courses.add(course);
-    });
-
-    Navigator.pop(context);
-
-    clearControllers();
   }
 
-  Widget _timeFieldRow({required IconData icon, required String label, required String value, required VoidCallback onTap}) {
+  Widget _timeFieldRow({required BuildContext context, required IconData icon, required String label, required String value, required VoidCallback onTap}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? Colors.grey.shade800 : Colors.grey.shade50,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: value != "—" ? Colors.deepPurple.shade100 : Colors.grey.shade300),
+          border: Border.all(color: value != "—" ? Colors.deepPurple.shade200 : Colors.grey.shade400),
         ),
         child: Row(
           children: [
@@ -823,7 +826,7 @@ class CoursesScreenState extends State<CoursesScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(label, style: TextStyle(fontSize: 10, color: Colors.grey.shade500)),
-                Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: value != "—" ? Colors.black87 : Colors.grey)),
+                Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: value != "—" ? Theme.of(context).colorScheme.onSurface : Colors.grey)),
               ],
             ),
           ],

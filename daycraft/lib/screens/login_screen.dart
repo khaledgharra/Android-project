@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import 'signup_screen.dart';
+import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -51,8 +52,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (error != null) {
       setState(() => errorMessage = error);
+    } else {
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
     }
-    // If success, AuthGate in main.dart will automatically navigate to HomeScreen
   }
 
   @override

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import 'home_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -58,17 +59,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
     if (error != null) {
       setState(() => errorMessage = error);
     } else {
-      // Success! Show a brief message then pop back
-      // AuthGate will automatically redirect to HomeScreen
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Account created successfully! Welcome to DayCraft.'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pop(context); // Go back to login (AuthGate handles redirect)
-      }
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
     }
   }
 

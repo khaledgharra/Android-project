@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart'; 
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:daycraft/services/auth_service.dart';
-// ignore: unused_import
-import 'package:daycraft/services/notification_service.dart';
+import 'package:daycraft/services/theme_service.dart';
+import 'login_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -13,7 +14,6 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   String _userName = "Student";
   final TextEditingController _nameController = TextEditingController();
-  bool _deadlineRemindersEnabled = true;
 
   @override
   void initState() {
@@ -39,68 +39,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _nameController.text = updated;
     });
     await AuthService.updateDisplayName(updated);
-  }
-
-  Widget _sectionDivider() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 8.0),
-      child: Divider(thickness: 1.2, height: 1.0, color: Colors.grey),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Name updated!")),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final cardColor = Colors.white;
-    final cornerRadius = 16.0;
+    final themeService = context.watch<ThemeService>();
+    final isDark = themeService.isDark;
+    final cardBg = Theme.of(context).cardColor;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => Navigator.of(context).pop(),
-          tooltip: 'Back',
         ),
-        elevation: 0,
-        backgroundColor: const Color(0xFFFDFBF7),
-        foregroundColor: Colors.black87,
       ),
       body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         children: [
-          Container(
-            padding: const EdgeInsets.all(16.0),
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(cornerRadius),
-              boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4)),
-              ],
-            ),
+          // ── Profile ──
+          _SectionCard(
+            cardBg: cardBg,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'User Profile',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black54),
-                ),
-                const SizedBox(height: 12),
+                _sectionTitle('User Profile'),
+                const SizedBox(height: 14),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     CircleAvatar(
-                      radius: 26,
+                      radius: 28,
                       backgroundColor: Colors.deepPurple.shade100,
-                      child: const Icon(Icons.person, color: Colors.deepPurple, size: 28),
+                      child: Text(
+                        _userName.isNotEmpty ? _userName[0].toUpperCase() : 'S',
+                        style: const TextStyle(color: Colors.deepPurple, fontSize: 22, fontWeight: FontWeight.bold),
+                      ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Name',
-                            style: TextStyle(fontSize: 14, color: Colors.black54),
-                          ),
+                          const Text('Display Name', style: TextStyle(fontSize: 13, color: Colors.grey)),
                           const SizedBox(height: 6),
                           TextField(
                             controller: _nameController,
@@ -109,20 +96,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Colors.grey),
+                                borderSide: BorderSide(color: Colors.grey.shade300),
                               ),
-                              hintText: 'Enter your display name',
+                              hintText: 'Enter your name',
                               suffixIcon: IconButton(
-                                icon: const Icon(Icons.save_rounded),
+                                icon: const Icon(Icons.save_rounded, color: Colors.deepPurple),
                                 onPressed: () => _saveName(_nameController.text),
-                                tooltip: 'Save name',
+                                tooltip: 'Save',
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Current display name: $_userName',
-                            style: const TextStyle(fontSize: 12, color: Colors.grey),
                           ),
                         ],
                       ),
@@ -132,80 +114,142 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 14),
-          _sectionDivider(),
-          Container(
-            padding: const EdgeInsets.all(16.0),
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(cornerRadius),
-              boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4)),
-              ],
-            ),
-            child: const Column(
+
+          const SizedBox(height: 16),
+
+          // ── Appearance ──
+          _SectionCard(
+            cardBg: cardBg,
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Notifications',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Manage when you would like to be reminded about deadlines and events.',
-                  style: TextStyle(fontSize: 13, color: Colors.black54),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            elevation: 1,
-            child: Column(
-              children: [
+                _sectionTitle('Appearance'),
+                const SizedBox(height: 4),
                 SwitchListTile(
-                  title: const Text('Deadline Reminders'),
-                  subtitle: const Text('Receive reminders before deadlines.'),
-                  value: _deadlineRemindersEnabled,
-                  onChanged: (val) {
-                    setState(() {
-                      _deadlineRemindersEnabled = val;
-                    });
-                  },
-                  secondary: const Icon(Icons.alarm_on_rounded, color: Colors.deepPurple),
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Dark Mode', style: TextStyle(fontWeight: FontWeight.w500)),
+                  subtitle: Text(isDark ? 'Dark theme enabled' : 'Light theme enabled',
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                  secondary: Container(
+                    width: 38, height: 38,
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.deepPurple.withOpacity(0.2) : Colors.amber.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                      color: isDark ? Colors.deepPurple.shade300 : Colors.amber.shade700,
+                      size: 20,
+                    ),
+                  ),
+                  value: isDark,
+                  activeColor: Colors.deepPurple,
+                  onChanged: (_) => themeService.toggle(),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 14),
-          _sectionDivider(),
-          Container(
-            padding: const EdgeInsets.all(16.0),
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(cornerRadius),
-              boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4)),
+
+          const SizedBox(height: 16),
+
+          // ── Notifications ──
+          _SectionCard(
+            cardBg: cardBg,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sectionTitle('Notifications'),
+                const SizedBox(height: 4),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Deadline Reminders', style: TextStyle(fontWeight: FontWeight.w500)),
+                  subtitle: Text('Get reminded 24h before a deadline',
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                  secondary: Container(
+                    width: 38, height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.deepPurple.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.alarm_rounded, color: Colors.deepPurple, size: 20),
+                  ),
+                  value: true,
+                  activeColor: Colors.deepPurple,
+                  onChanged: (_) {},
+                ),
               ],
             ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // ── About ──
+          _SectionCard(
+            cardBg: cardBg,
             child: Column(
               children: [
                 ListTile(
-                  leading: const Icon(Icons.info_outline, color: Colors.deepPurple),
-                  title: const Text('About DayCraft'),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-                  onTap: _showAboutDialog,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    width: 38, height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.deepPurple.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.info_outline_rounded, color: Colors.deepPurple, size: 20),
+                  ),
+                  title: const Text('About DayCraft', style: TextStyle(fontWeight: FontWeight.w500)),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.grey),
+                  onTap: () => showAboutDialog(
+                    context: context,
+                    applicationName: 'DayCraft',
+                    applicationVersion: '1.0.0',
+                    applicationLegalese: '© 2026 DayCraft',
+                    children: const [
+                      Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: Text('A productivity app for students to manage tasks, deadlines, and schedules.'),
+                      ),
+                    ],
+                  ),
                 ),
-                const Divider(height: 1),
+                Divider(height: 1, color: Colors.grey.shade200),
                 ListTile(
-                  leading: const Icon(Icons.lock_outline, color: Colors.deepPurple),
-                  title: const Text('Privacy Policy'),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Privacy Policy coming soon')),
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    width: 38, height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.logout_rounded, color: Colors.red, size: 20),
+                  ),
+                  title: const Text('Sign Out', style: TextStyle(fontWeight: FontWeight.w500, color: Colors.red)),
+                  onTap: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        title: const Text("Sign Out"),
+                        content: const Text("Are you sure you want to sign out?"),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+                          ElevatedButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                            child: const Text("Sign Out"),
+                          ),
+                        ],
+                      ),
                     );
+                    if (confirm == true) {
+                      await AuthService.signOut();
+                      if (context.mounted) {
+                        Navigator.of(context).pushAndRemoveUntil(
+                          MaterialPageRoute(builder: (_) => const LoginScreen()),
+                          (route) => false,
+                        );
+                      }
+                    }
                   },
                 ),
               ],
@@ -216,34 +260,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _showAboutDialog() {
-    showAboutDialog(
-      context: context,
-      applicationName: 'DayCraft',
-      applicationVersion: '1.0.0',
-      applicationLegalese: '© 2026 DayCraft Team',
-      applicationIcon: SizedBox(
-        width: 48,
-        height: 48,
-        child: _buildAboutIcon(),
-      ),
-      children: const [
-        Padding(
-          padding: EdgeInsets.only(top: 8.0),
-          child: Text('DayCraft is a productivity app for students to manage tasks, deadlines, and schedules.'),
-        ),
-      ],
-    );
+  Widget _sectionTitle(String text) {
+    return Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey));
   }
+}
 
-  Widget _buildAboutIcon() {
+class _SectionCard extends StatelessWidget {
+  final Widget child;
+  final Color cardBg;
+
+  const _SectionCard({required this.child, required this.cardBg});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(6),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.deepPurple.shade100,
-        borderRadius: BorderRadius.circular(8),
+        color: cardBg,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 3))],
       ),
-      child: const Icon(Icons.apps, color: Colors.deepPurple, size: 28),
+      child: child,
     );
   }
 }

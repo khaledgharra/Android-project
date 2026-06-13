@@ -123,7 +123,6 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFDFBF7),
       appBar: AppBar(
         title: const Text("🧠 AI Study Assistant"),
         backgroundColor: Colors.transparent,
