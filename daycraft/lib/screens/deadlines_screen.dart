@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/storage_service.dart';
 import 'deadline_details_screen.dart';
+import 'ai_schedule_planner_screen.dart';
 
 class DeadlinesScreen extends StatefulWidget {
   const DeadlinesScreen({super.key});
@@ -22,6 +23,13 @@ class DeadlinesScreenState extends State<DeadlinesScreen> {
   void initState() {
     super.initState();
     _loadAll();
+  }
+
+  @override
+  void dispose() {
+    titleController.dispose();
+    estimatedHoursController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadAll() async {
@@ -127,177 +135,191 @@ class DeadlinesScreenState extends State<DeadlinesScreen> {
       return;
     }
 
-    if (selectedTime == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please choose a time")),
-      );
-      return;
+    final timeStr = selectedTime != null ? selectedTime!.format(context) : '';
+
+    // Capture all values before popping (dialog context becomes invalid after pop)
+    final title = titleController.text.trim();
+    final dateStr = "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}";
+    final type = selectedDeadlineType;
+    final course = selectedCourse == "None" ? "" : selectedCourse;
+    final hours = estimatedHoursController.text;
+
+    // Find courseColor from loaded courses
+    int? courseColorInt;
+    if (course.isNotEmpty) {
+      for (final c in _coursesList) {
+        if (c["name"]?.toString() == course) {
+          final v = c["color"];
+          if (v != null) try { courseColorInt = (v as num).toInt(); } catch (_) {}
+          break;
+        }
+      }
     }
 
-    // Format time before popping dialog (context may become invalid after pop)
-    final timeStr = selectedTime!.format(context);
-
-    final newDeadline = {
-      "title": titleController.text,
-      "date": "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}",
-      "time": timeStr,
-      "type": selectedDeadlineType,
-      "course": selectedCourse == "None" ? "" : selectedCourse,
-      "estimatedHours": estimatedHoursController.text,
-    };
-
+    clearDeadlineState();
     Navigator.pop(context);
 
-    // Add to Firestore and get document ID
+    final newDeadline = <String, dynamic>{
+      "title": title,
+      "date": dateStr,
+      "time": timeStr,
+      "type": type,
+      "course": course,
+      "estimatedHours": hours,
+      if (courseColorInt != null) "courseColor": courseColorInt,
+    };
+
     final docId = await StorageService.addDeadline(newDeadline);
-    if (docId != null) {
-      newDeadline['id'] = docId;
-    }
+    if (docId != null) newDeadline['id'] = docId;
 
     if (!mounted) return;
     setState(() {
       deadlines.add(newDeadline);
       sortDeadlines();
     });
-
-    titleController.clear();
-    estimatedHoursController.clear();
-    selectedDate = null;
-    selectedTime = null;
   }
 
   void showAddDialog() {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              title: const Text("Add Deadline"),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: titleController,
-                      autofocus: true,
-                      decoration: InputDecoration(
-                        hintText: "Assignment / Exam...",
-                        filled: true, fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    // Date & Time — single tap chains date → time
-                    GestureDetector(
-                      onTap: () async {
-                        final pickedDate = await showDatePicker(
-                          context: context, initialDate: selectedDate ?? DateTime.now(),
-                          firstDate: DateTime.now(), lastDate: DateTime(2030),
-                        );
-                        if (pickedDate == null) return;
-                        setDialogState(() => selectedDate = pickedDate);
-                        final pickedTime = await showTimePicker(
-                          context: context, initialTime: selectedTime ?? const TimeOfDay(hour: 23, minute: 59),
-                          initialEntryMode: TimePickerEntryMode.inputOnly, helpText: "DUE TIME",
-                        );
-                        if (pickedTime != null) setDialogState(() => selectedTime = pickedTime);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                        decoration: BoxDecoration(color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50, borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: selectedDate != null ? Colors.deepPurple.shade200 : Colors.grey.shade600.withOpacity(0.3))),
-                        child: Row(children: [
-                          Icon(Icons.event_rounded, size: 18, color: selectedDate != null ? Colors.deepPurple : Colors.grey),
-                          const SizedBox(width: 10),
-                          Text(
-                            selectedDate != null
-                                ? "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}${selectedTime != null ? '  ${selectedTime!.format(context)}' : ''}"
-                                : "Set due date & time...",
-                            style: TextStyle(fontWeight: FontWeight.w600, color: selectedDate != null ? Theme.of(context).colorScheme.onSurface : Colors.grey),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        return Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(sheetCtx).viewInsets.bottom),
+          child: StatefulBuilder(
+            builder: (ctx, setDialogState) {
+              final isDark = Theme.of(context).brightness == Brightness.dark;
+              final fill = isDark ? Colors.grey.shade800 : Colors.grey.shade50;
+              return Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Center(child: Container(width: 40, height: 4, margin: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+                        const Text("Add Deadline", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: titleController,
+                          autofocus: true,
+                          decoration: InputDecoration(
+                            hintText: "Assignment / Exam...",
+                            filled: true, fillColor: fill,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                           ),
+                        ),
+                        const SizedBox(height: 12),
+                        GestureDetector(
+                          onTap: () async {
+                            final d = await showDatePicker(context: sheetCtx, initialDate: selectedDate ?? DateTime.now(),
+                              firstDate: DateTime.now(), lastDate: DateTime(2030));
+                            if (d == null || !sheetCtx.mounted) return;
+                            setDialogState(() => selectedDate = d);
+                            final t = await showTimePicker(context: sheetCtx,
+                              initialTime: selectedTime ?? const TimeOfDay(hour: 23, minute: 59),
+                              initialEntryMode: TimePickerEntryMode.inputOnly, helpText: "DUE TIME");
+                            if (t != null) setDialogState(() => selectedTime = t);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                            decoration: BoxDecoration(color: fill, borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: selectedDate != null ? Colors.deepPurple.shade200 : Colors.grey.shade600.withOpacity(0.3))),
+                            child: Row(children: [
+                              Icon(Icons.event_rounded, size: 18, color: selectedDate != null ? Colors.deepPurple : Colors.grey),
+                              const SizedBox(width: 10),
+                              Expanded(child: Text(
+                                selectedDate != null
+                                    ? "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}${selectedTime != null ? '  ${selectedTime!.format(ctx)}' : ''}"
+                                    : "Set due date (& optional time)...",
+                                style: TextStyle(fontWeight: FontWeight.w600, color: selectedDate != null ? Theme.of(context).colorScheme.onSurface : Colors.grey),
+                              )),
+                            ]),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: estimatedHoursController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: InputDecoration(
+                            labelText: "Estimated Study Hours",
+                            filled: true, fillColor: fill,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        GestureDetector(
+                          onTap: () async {
+                            final picked = await showModalBottomSheet<String>(context: sheetCtx,
+                              builder: (c) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                                const Padding(padding: EdgeInsets.all(12), child: Text("Select Course", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                                ...availableCourses.map((name) => ListTile(title: Text(name), onTap: () => Navigator.pop(c, name))),
+                              ])));
+                            if (picked != null) setDialogState(() => selectedCourse = picked);
+                          },
+                          child: _pickerRow(fill, Icons.school_rounded, Colors.deepPurple, selectedCourse),
+                        ),
+                        const SizedBox(height: 12),
+                        GestureDetector(
+                          onTap: () async {
+                            final picked = await showModalBottomSheet<String>(context: sheetCtx,
+                              builder: (c) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                                const Padding(padding: EdgeInsets.all(12), child: Text("Deadline Type", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                                ListTile(leading: const Icon(Icons.assignment, color: Colors.orange), title: const Text("Homework"), onTap: () => Navigator.pop(c, "Homework")),
+                                ListTile(leading: const Icon(Icons.school, color: Colors.red), title: const Text("Exam"), onTap: () => Navigator.pop(c, "Exam")),
+                              ])));
+                            if (picked != null) setDialogState(() => selectedDeadlineType = picked);
+                          },
+                          child: _pickerRow(fill, getDeadlineIcon(selectedDeadlineType), getDeadlineTypeColor(selectedDeadlineType), selectedDeadlineType),
+                        ),
+                        const SizedBox(height: 20),
+                        Row(children: [
+                          Expanded(child: OutlinedButton(
+                            onPressed: () { clearDeadlineState(); Navigator.pop(sheetCtx); },
+                            style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                            child: const Text("Cancel"))),
+                          const SizedBox(width: 12),
+                          Expanded(child: ElevatedButton(
+                            onPressed: addDeadline,
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                            child: const Text("Add"))),
                         ]),
-                      ),
+                        const SizedBox(height: 4),
+                      ],
                     ),
-                    const SizedBox(height: 14),
-                    TextField(
-                      controller: estimatedHoursController,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: "Estimated Study Hours",
-                        filled: true, fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    // Course picker
-                    GestureDetector(
-                      onTap: () async {
-                        final picked = await showModalBottomSheet<String>(
-                          context: context,
-                          builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                            const Padding(padding: EdgeInsets.all(12), child: Text("Select Course", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-                            ...availableCourses.map((c) => ListTile(title: Text(c), onTap: () => Navigator.pop(ctx, c))),
-                          ])),
-                        );
-                        if (picked != null) setDialogState(() => selectedCourse = picked);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        decoration: BoxDecoration(color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade600.withOpacity(0.3))),
-                        child: Row(children: [
-                          const Icon(Icons.school_rounded, size: 16, color: Colors.deepPurple),
-                          const SizedBox(width: 10),
-                          Text(selectedCourse, style: const TextStyle(fontWeight: FontWeight.w600)),
-                          const Spacer(),
-                          const Icon(Icons.arrow_drop_down, color: Colors.grey),
-                        ]),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    // Type picker
-                    GestureDetector(
-                      onTap: () async {
-                        final picked = await showModalBottomSheet<String>(
-                          context: context,
-                          builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                            const Padding(padding: EdgeInsets.all(12), child: Text("Deadline Type", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-                            ListTile(leading: const Icon(Icons.assignment, color: Colors.orange), title: const Text("Homework"), onTap: () => Navigator.pop(ctx, "Homework")),
-                            ListTile(leading: const Icon(Icons.school, color: Colors.red), title: const Text("Exam"), onTap: () => Navigator.pop(ctx, "Exam")),
-                          ])),
-                        );
-                        if (picked != null) setDialogState(() => selectedDeadlineType = picked);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        decoration: BoxDecoration(color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade600.withOpacity(0.3))),
-                        child: Row(children: [
-                          Icon(getDeadlineIcon(selectedDeadlineType), size: 16, color: getDeadlineTypeColor(selectedDeadlineType)),
-                          const SizedBox(width: 10),
-                          Text(selectedDeadlineType, style: const TextStyle(fontWeight: FontWeight.w600)),
-                          const Spacer(),
-                          const Icon(Icons.arrow_drop_down, color: Colors.grey),
-                        ]),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  onPressed: addDeadline,
-                  child: const Text("Add"),
-                ),
-              ],
-            );
-          },
+              );
+            },
+          ),
         );
       },
     );
   }
+
+  Widget _pickerRow(Color fill, IconData icon, Color iconColor, String label) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    decoration: BoxDecoration(color: fill, borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.grey.shade600.withOpacity(0.3))),
+    child: Row(children: [
+      Icon(icon, size: 16, color: iconColor),
+      const SizedBox(width: 10),
+      Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+      const Spacer(),
+      const Icon(Icons.arrow_drop_down, color: Colors.grey),
+    ]),
+  );
 
   Color getDeadlineTypeColor(String type) {
     switch (type) {
@@ -341,14 +363,16 @@ class DeadlinesScreenState extends State<DeadlinesScreen> {
 
   Future<void> _deleteDeadlineItem(Map<String, dynamic> item) async {
     final docId = item['id'];
-    if (docId != null) await StorageService.deleteDeadline(docId);
-    if (!mounted) return;
-    setState(() {
-      deadlines.removeWhere((d) {
-        if (docId != null) return d['id'] == docId;
-        return d['title'] == item['title'] && d['date'] == item['date'];
+    // Remove locally first — Dismissible requires the item gone before any async gap
+    if (mounted) {
+      setState(() {
+        deadlines.removeWhere((d) {
+          if (docId != null) return d['id'] == docId;
+          return d['title'] == item['title'] && d['date'] == item['date'];
+        });
       });
-    });
+    }
+    if (docId != null) await StorageService.deleteDeadline(docId);
   }
 
   List<Map<String, dynamic>> _tabItems(int tabIndex) {
@@ -627,6 +651,17 @@ class DeadlinesScreenState extends State<DeadlinesScreen> {
             ],
           ),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.auto_awesome_rounded, color: Colors.deepPurple),
+              tooltip: 'AI Schedule Planner',
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AISchedulePlannerScreen()),
+                );
+                if (result == true) _loadAll();
+              },
+            ),
             PopupMenuButton<String>(
               icon: const Icon(Icons.sort_rounded),
               onSelected: (value) => setState(() { sortOption = value; sortDeadlines(); }),
@@ -674,157 +709,171 @@ class DeadlinesScreenState extends State<DeadlinesScreen> {
 
     titleController.text = item["title"] ?? "";
     selectedDate = parseDeadlineDate(item["date"] ?? "") ?? DateTime.now();
-    selectedTime = TimeOfDay.now();
-    estimatedHoursController.text = item["estimatedHours"] ?? "";
+    selectedTime = null;
+    estimatedHoursController.text = item["estimatedHours"]?.toString() ?? "";
     selectedDeadlineType = item["type"] ?? "Homework";
-    selectedCourse = item["course"] == null || item["course"] == ""
-        ? "None"
-        : item["course"];
+    selectedCourse = item["course"] == null || item["course"] == "" ? "None" : item["course"];
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              title: const Text("Edit Deadline"),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: titleController,
-                      decoration: InputDecoration(
-                        hintText: "Deadline Title",
-                        filled: true, fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    // Date & Time chained
-                    GestureDetector(
-                      onTap: () async {
-                        final pickedDate = await showDatePicker(
-                          context: context, initialDate: selectedDate ?? DateTime.now(),
-                          firstDate: DateTime.now(), lastDate: DateTime(2030),
-                        );
-                        if (pickedDate == null) return;
-                        setDialogState(() => selectedDate = pickedDate);
-                        final pickedTime = await showTimePicker(
-                          context: context, initialTime: selectedTime ?? const TimeOfDay(hour: 23, minute: 59),
-                          initialEntryMode: TimePickerEntryMode.inputOnly, helpText: "DUE TIME",
-                        );
-                        if (pickedTime != null) setDialogState(() => selectedTime = pickedTime);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                        decoration: BoxDecoration(color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50, borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: selectedDate != null ? Colors.deepPurple.shade200 : Colors.grey.shade600.withOpacity(0.3))),
-                        child: Row(children: [
-                          Icon(Icons.event_rounded, size: 18, color: selectedDate != null ? Colors.deepPurple : Colors.grey),
-                          const SizedBox(width: 10),
-                          Text(
-                            selectedDate != null
-                                ? "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}${selectedTime != null ? '  ${selectedTime!.format(context)}' : ''}"
-                                : "Set due date & time...",
-                            style: TextStyle(fontWeight: FontWeight.w600, color: selectedDate != null ? Theme.of(context).colorScheme.onSurface : Colors.grey),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        return Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(sheetCtx).viewInsets.bottom),
+          child: StatefulBuilder(
+            builder: (ctx, setDialogState) {
+              final isDark = Theme.of(context).brightness == Brightness.dark;
+              final fill = isDark ? Colors.grey.shade800 : Colors.grey.shade50;
+              return Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Center(child: Container(width: 40, height: 4, margin: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+                        const Text("Edit Deadline", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: titleController,
+                          decoration: InputDecoration(
+                            hintText: "Deadline Title",
+                            filled: true, fillColor: fill,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                           ),
-                        ]),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    TextField(
-                      controller: estimatedHoursController,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: "Estimated Study Hours",
-                        filled: true, fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    GestureDetector(
-                      onTap: () async {
-                        final picked = await showModalBottomSheet<String>(
-                          context: context,
-                          builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                            const Padding(padding: EdgeInsets.all(12), child: Text("Select Course", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-                            ...availableCourses.map((c) => ListTile(title: Text(c), onTap: () => Navigator.pop(ctx, c))),
-                          ])),
-                        );
-                        if (picked != null) setDialogState(() => selectedCourse = picked);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        decoration: BoxDecoration(color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade600.withOpacity(0.3))),
-                        child: Row(children: [
-                          const Icon(Icons.school_rounded, size: 16, color: Colors.deepPurple),
-                          const SizedBox(width: 10),
-                          Text(selectedCourse, style: const TextStyle(fontWeight: FontWeight.w600)),
-                          const Spacer(),
-                          const Icon(Icons.arrow_drop_down, color: Colors.grey),
-                        ]),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    GestureDetector(
-                      onTap: () async {
-                        final picked = await showModalBottomSheet<String>(
-                          context: context,
-                          builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                            const Padding(padding: EdgeInsets.all(12), child: Text("Deadline Type", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-                            ListTile(leading: const Icon(Icons.assignment, color: Colors.orange), title: const Text("Homework"), onTap: () => Navigator.pop(ctx, "Homework")),
-                            ListTile(leading: const Icon(Icons.school, color: Colors.red), title: const Text("Exam"), onTap: () => Navigator.pop(ctx, "Exam")),
-                          ])),
-                        );
-                        if (picked != null) setDialogState(() => selectedDeadlineType = picked);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        decoration: BoxDecoration(color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade600.withOpacity(0.3))),
-                        child: Row(children: [
-                          Icon(getDeadlineIcon(selectedDeadlineType), size: 16, color: getDeadlineTypeColor(selectedDeadlineType)),
-                          const SizedBox(width: 10),
-                          Text(selectedDeadlineType, style: const TextStyle(fontWeight: FontWeight.w600)),
-                          const Spacer(),
-                          const Icon(Icons.arrow_drop_down, color: Colors.grey),
-                        ]),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(onPressed: () { clearDeadlineState(); Navigator.pop(context); }, child: const Text("Cancel")),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  onPressed: () async {
-                    final updatedData = {
-                      "title": titleController.text,
-                      "date": "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}",
-                      "time": selectedTime!.format(context),
-                      "type": selectedDeadlineType,
-                      "course": selectedCourse == "None" ? "" : selectedCourse,
-                      "estimatedHours": estimatedHoursController.text,
-                    };
+                        ),
+                        const SizedBox(height: 12),
+                        GestureDetector(
+                          onTap: () async {
+                            final d = await showDatePicker(context: sheetCtx, initialDate: selectedDate ?? DateTime.now(),
+                              firstDate: DateTime(2020), lastDate: DateTime(2030));
+                            if (d == null || !sheetCtx.mounted) return;
+                            setDialogState(() => selectedDate = d);
+                            final t = await showTimePicker(context: sheetCtx,
+                              initialTime: selectedTime ?? const TimeOfDay(hour: 23, minute: 59),
+                              initialEntryMode: TimePickerEntryMode.inputOnly, helpText: "DUE TIME");
+                            if (t != null) setDialogState(() => selectedTime = t);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                            decoration: BoxDecoration(color: fill, borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: selectedDate != null ? Colors.deepPurple.shade200 : Colors.grey.shade600.withOpacity(0.3))),
+                            child: Row(children: [
+                              Icon(Icons.event_rounded, size: 18, color: selectedDate != null ? Colors.deepPurple : Colors.grey),
+                              const SizedBox(width: 10),
+                              Expanded(child: Text(
+                                selectedDate != null
+                                    ? "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}${selectedTime != null ? '  ${selectedTime!.format(ctx)}' : (item['time'] != null && item['time'].toString().isNotEmpty ? '  ${item['time']}' : '')}"
+                                    : "Set due date (& optional time)...",
+                                style: TextStyle(fontWeight: FontWeight.w600, color: selectedDate != null ? Theme.of(context).colorScheme.onSurface : Colors.grey),
+                              )),
+                            ]),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: estimatedHoursController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: InputDecoration(
+                            labelText: "Estimated Study Hours",
+                            filled: true, fillColor: fill,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        GestureDetector(
+                          onTap: () async {
+                            final picked = await showModalBottomSheet<String>(context: sheetCtx,
+                              builder: (c) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                                const Padding(padding: EdgeInsets.all(12), child: Text("Select Course", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                                ...availableCourses.map((name) => ListTile(title: Text(name), onTap: () => Navigator.pop(c, name))),
+                              ])));
+                            if (picked != null) setDialogState(() => selectedCourse = picked);
+                          },
+                          child: _pickerRow(fill, Icons.school_rounded, Colors.deepPurple, selectedCourse),
+                        ),
+                        const SizedBox(height: 12),
+                        GestureDetector(
+                          onTap: () async {
+                            final picked = await showModalBottomSheet<String>(context: sheetCtx,
+                              builder: (c) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                                const Padding(padding: EdgeInsets.all(12), child: Text("Deadline Type", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                                ListTile(leading: const Icon(Icons.assignment, color: Colors.orange), title: const Text("Homework"), onTap: () => Navigator.pop(c, "Homework")),
+                                ListTile(leading: const Icon(Icons.school, color: Colors.red), title: const Text("Exam"), onTap: () => Navigator.pop(c, "Exam")),
+                              ])));
+                            if (picked != null) setDialogState(() => selectedDeadlineType = picked);
+                          },
+                          child: _pickerRow(fill, getDeadlineIcon(selectedDeadlineType), getDeadlineTypeColor(selectedDeadlineType), selectedDeadlineType),
+                        ),
+                        const SizedBox(height: 20),
+                        Row(children: [
+                          Expanded(child: OutlinedButton(
+                            onPressed: () { clearDeadlineState(); Navigator.pop(sheetCtx); },
+                            style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                            child: const Text("Cancel"))),
+                          const SizedBox(width: 12),
+                          Expanded(child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                            onPressed: () async {
+                              if (selectedDate == null) return;
+                              final timeVal = selectedTime != null
+                                  ? selectedTime!.format(ctx)
+                                  : (item['time']?.toString() ?? '');
+                              final newCourse = selectedCourse == "None" ? "" : selectedCourse;
+                              int? colorInt;
+                              if (newCourse.isNotEmpty) {
+                                for (final c in _coursesList) {
+                                  if (c["name"]?.toString() == newCourse) {
+                                    final v = c["color"];
+                                    if (v != null) try { colorInt = (v as num).toInt(); } catch (_) {}
+                                    break;
+                                  }
+                                }
+                              }
+                              colorInt ??= item["courseColor"] != null ? (item["courseColor"] as num).toInt() : null;
 
-                    final docId = item['id'];
-                    if (docId != null) {
-                      await StorageService.updateDeadline(docId, updatedData);
-                      updatedData['id'] = docId;
-                    }
+                              final updatedData = <String, dynamic>{
+                                "title": titleController.text.trim(),
+                                "date": "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}",
+                                "time": timeVal,
+                                "type": selectedDeadlineType,
+                                "course": newCourse,
+                                "estimatedHours": estimatedHoursController.text,
+                                if (colorInt != null) "courseColor": colorInt,
+                              };
 
-                    if (!mounted) return;
-                    setState(() { if (editingIndex >= 0) deadlines[editingIndex] = updatedData; sortDeadlines(); });
-                    clearDeadlineState();
-                    Navigator.pop(context);
-                  },
-                  child: const Text("Update"),
+                              final docId = item['id'];
+                              if (docId != null) {
+                                await StorageService.updateDeadline(docId, updatedData);
+                                updatedData['id'] = docId;
+                              }
+
+                              if (!mounted) return;
+                              setState(() { if (editingIndex >= 0) deadlines[editingIndex] = updatedData; sortDeadlines(); });
+                              clearDeadlineState();
+                              if (sheetCtx.mounted) Navigator.pop(sheetCtx);
+                            },
+                            child: const Text("Update"))),
+                        ]),
+                        const SizedBox(height: 4),
+                      ],
+                    ),
+                  ),
                 ),
-              ],
-            );
-          },
+              );
+            },
+          ),
         );
       },
     );

@@ -12,14 +12,17 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   List<Map<String, dynamic>> schedule = [];
 
   String currentViewDay = "Sunday";
+  late DateTime _currentWeekSunday;
+
+  double _hourHeight = 60.0;
+  double _scaleStartHeight = 60.0;
 
   final TextEditingController titleController = TextEditingController();
+  final TextEditingController _startTimeCtrl = TextEditingController();
+  final TextEditingController _endTimeCtrl = TextEditingController();
 
   String selectedDay = "Sunday";
   String selectedType = "Activity";
-
-  TimeOfDay? startTime;
-  TimeOfDay? endTime;
 
   final List<String> days = [
     "Sunday",
@@ -34,7 +37,39 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   @override
   void initState() {
     super.initState();
+    _currentWeekSunday = _weekSunday(DateTime.now());
+    currentViewDay = days[DateTime.now().weekday % 7];
     loadSchedule();
+  }
+
+  // Returns the Sunday that starts the week containing [d]
+  static DateTime _weekSunday(DateTime d) {
+    final day = DateTime(d.year, d.month, d.day);
+    return day.subtract(Duration(days: day.weekday % 7));
+  }
+
+  // The exact calendar date currently being viewed
+  DateTime get _currentViewDate =>
+      _currentWeekSunday.add(Duration(days: days.indexOf(currentViewDay)));
+
+  String _fmtDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  String _weekLabel() {
+    final end = _currentWeekSunday.add(const Duration(days: 6));
+    const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    if (_currentWeekSunday.month == end.month) {
+      return '${m[_currentWeekSunday.month - 1]} ${_currentWeekSunday.day}–${end.day}';
+    }
+    return '${m[_currentWeekSunday.month - 1]} ${_currentWeekSunday.day} – ${m[end.month - 1]} ${end.day}';
+  }
+
+  @override
+  void dispose() {
+    titleController.dispose();
+    _startTimeCtrl.dispose();
+    _endTimeCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> loadSchedule() async {
@@ -68,36 +103,49 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }
 
   Future<void> addSchedule() async {
-    if (titleController.text.isEmpty || startTime == null || endTime == null) {
+    final startStr = _startTimeCtrl.text.trim();
+    final endStr = _endTimeCtrl.text.trim();
+
+    if (titleController.text.isEmpty || startStr.isEmpty || endStr.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please fill in title, start time, and end time")),
+      );
       return;
     }
-    final newStart = startTime!.hour * 60 + startTime!.minute;
-    final newEnd = endTime!.hour * 60 + endTime!.minute;
+
+    int newStart, newEnd;
+    try {
+      final (sh, sm) = _parseTimeToHourMinute(startStr);
+      final (eh, em) = _parseTimeToHourMinute(endStr);
+      newStart = sh * 60 + sm;
+      newEnd = eh * 60 + em;
+    } catch (_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Invalid time — use 24h format like 14:00")),
+      );
+      return;
+    }
+
+    if (newEnd <= newStart) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("End time must be after start time")),
+      );
+      return;
+    }
 
     final overlapping = schedule.any((item) {
-      if (item["day"] != selectedDay) {
-        return false;
-      }
-
-      if (item["start"] == null || item["end"] == null) {
-        return false;
-      }
-
+      if (item["day"] != selectedDay || item["start"] == null || item["end"] == null) return false;
       final (existingStartHour, existingStartMin) = _parseTimeToHourMinute(item["start"]);
       final (existingEndHour, existingEndMin) = _parseTimeToHourMinute(item["end"]);
-
-      final existingStartMinutes = existingStartHour * 60 + existingStartMin;
-      final existingEndMinutes = existingEndHour * 60 + existingEndMin;
-
-      return !(newEnd <= existingStartMinutes || newStart >= existingEndMinutes);
+      final existingStart = existingStartHour * 60 + existingStartMin;
+      final existingEnd = existingEndHour * 60 + existingEndMin;
+      return !(newEnd <= existingStart || newStart >= existingEnd);
     });
 
     if (overlapping) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("This activity overlaps with another schedule item"),
-        ),
+        const SnackBar(content: Text("This activity overlaps with another schedule item")),
       );
       return;
     }
@@ -106,22 +154,19 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       "title": titleController.text,
       "type": selectedType,
       "day": selectedDay,
-      "start": startTime!.format(context),
-      "end": endTime!.format(context),
+      "start": startStr,
+      "end": endStr,
     };
 
-    // Add to Firestore and get the document ID
     final docId = await StorageService.addScheduleItem(newItem);
-    if (docId != null) {
-      newItem['id'] = docId;
-    }
+    if (docId != null) newItem['id'] = docId;
 
     if (!mounted) return;
-    setState(() {
-      schedule.add(newItem);
-    });
+    setState(() => schedule.add(newItem));
 
     titleController.clear();
+    _startTimeCtrl.clear();
+    _endTimeCtrl.clear();
     Navigator.pop(context);
   }
 
@@ -184,77 +229,36 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                       },
                     ),
 
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
 
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-
-                      decoration: BoxDecoration(
-                        color: Colors.deepPurple.shade50,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-
-                        children: [
-                          Text(
-                            "Selected Day: $selectedDay",
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          // Single tap chains start → end
-                          GestureDetector(
-                            onTap: () async {
-                              final pickedStart = await showTimePicker(
-                                context: context,
-                                initialTime: startTime ?? const TimeOfDay(hour: 8, minute: 0),
-                                initialEntryMode: TimePickerEntryMode.inputOnly,
-                                helpText: "START TIME",
-                              );
-                              if (pickedStart == null) return;
-                              setDialogState(() => startTime = pickedStart);
-                              final pickedEnd = await showTimePicker(
-                                context: context,
-                                initialTime: endTime ?? pickedStart,
-                                initialEntryMode: TimePickerEntryMode.inputOnly,
-                                helpText: "END TIME",
-                              );
-                              if (pickedEnd != null) setDialogState(() => endTime = pickedEnd);
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: (startTime != null && endTime != null) ? Colors.deepPurple.shade200 : Colors.grey.shade300,
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.schedule_rounded, size: 18, color: startTime != null ? Colors.deepPurple : Colors.grey),
-                                  const SizedBox(width: 10),
-                                  Text(
-                                    startTime != null && endTime != null
-                                        ? "${startTime!.format(context)}  →  ${endTime!.format(context)}"
-                                        : startTime != null
-                                            ? "${startTime!.format(context)}  →  End?"
-                                            : "Set time...",
-                                    style: TextStyle(
-                                      fontWeight: startTime != null ? FontWeight.w600 : FontWeight.normal,
-                                      color: startTime != null ? Colors.black87 : Colors.grey,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _startTimeCtrl,
+                            keyboardType: TextInputType.datetime,
+                            decoration: InputDecoration(
+                              labelText: "Start",
+                              hintText: "14:00",
+                              prefixIcon: const Icon(Icons.schedule_rounded, size: 18),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            controller: _endTimeCtrl,
+                            keyboardType: TextInputType.datetime,
+                            decoration: InputDecoration(
+                              labelText: "End",
+                              hintText: "15:30",
+                              prefixIcon: const Icon(Icons.schedule_rounded, size: 18),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -281,11 +285,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }
 
   List<Map<String, dynamic>> getFilteredSchedule() {
+    final viewDateStr = _fmtDate(_currentViewDate);
     List<Map<String, dynamic>> filtered = schedule.where((item) {
-      return item["day"] != null &&
-          item["start"] != null &&
-          item["end"] != null &&
-          item["day"] == currentViewDay;
+      if (item["day"] == null || item["start"] == null || item["end"] == null) return false;
+      if (item["day"] != currentViewDay) return false;
+      // Date-specific items (e.g. AI study sessions) only appear on their exact date
+      final itemDate = item["date"]?.toString();
+      if (itemDate != null && itemDate.isNotEmpty) return itemDate == viewDateStr;
+      return true; // Recurring weekly items show every week
     }).toList();
 
     filtered.sort((a, b) {
@@ -331,12 +338,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Constants for the timeline
-    const double hourHeight = 60.0; // pixels per hour
     const int startHour = 0;
     const int endHour = 24;
-    const int totalHours = endHour - startHour; // 24 hours
-    const double totalHeight = totalHours * hourHeight;
+    const int totalHours = endHour - startHour;
+    final double totalHeight = totalHours * _hourHeight;
     const double timeColumnWidth = 50.0;
 
     final filtered = getFilteredSchedule();
@@ -352,6 +357,34 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
       body: Column(
         children: [
+          // Week navigation
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.chevron_left),
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => setState(() =>
+                      _currentWeekSunday = _currentWeekSunday.subtract(const Duration(days: 7))),
+                ),
+                Expanded(
+                  child: Center(
+                    child: Text(_weekLabel(),
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right),
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => setState(() =>
+                      _currentWeekSunday = _currentWeekSunday.add(const Duration(days: 7))),
+                ),
+              ],
+            ),
+          ),
           // Day selector
           SizedBox(
             height: 60,
@@ -361,28 +394,38 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               itemBuilder: (context, index) {
                 final day = days[index];
                 final selected = day == currentViewDay;
+                final chipDate = _currentWeekSunday.add(Duration(days: index));
+                final isToday = _fmtDate(chipDate) == _fmtDate(DateTime.now());
 
                 return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      currentViewDay = day;
-                    });
-                  },
+                  onTap: () => setState(() => currentViewDay = day),
                   child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: selected ? Colors.deepPurple : Colors.grey.shade200,
+                      color: selected ? Colors.deepPurple : (isToday ? Colors.deepPurple.shade50 : Colors.grey.shade200),
                       borderRadius: BorderRadius.circular(20),
+                      border: isToday && !selected ? Border.all(color: Colors.deepPurple.shade200) : null,
                     ),
-                    child: Center(
-                      child: Text(
-                        day.substring(0, 3),
-                        style: TextStyle(
-                          color: selected ? Colors.white : Colors.black,
-                          fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          day.substring(0, 3),
+                          style: TextStyle(
+                            color: selected ? Colors.white : (isToday ? Colors.deepPurple : Colors.black),
+                            fontWeight: selected || isToday ? FontWeight.bold : FontWeight.normal,
+                            fontSize: 12,
+                          ),
                         ),
-                      ),
+                        Text(
+                          '${chipDate.day}',
+                          style: TextStyle(
+                            color: selected ? Colors.white70 : Colors.grey.shade500,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 );
@@ -390,9 +433,16 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             ),
           ),
 
-          // Timeline
+          // Timeline — pinch to zoom
           Expanded(
-            child: SingleChildScrollView(
+            child: GestureDetector(
+              onScaleStart: (_) => _scaleStartHeight = _hourHeight,
+              onScaleUpdate: (d) {
+                if (d.pointerCount >= 2) {
+                  setState(() => _hourHeight = (_scaleStartHeight * d.scale).clamp(30.0, 200.0));
+                }
+              },
+              child: SingleChildScrollView(
               padding: const EdgeInsets.only(bottom: 20),
               child: SizedBox(
                 height: totalHeight,
@@ -407,7 +457,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                         children: List.generate(totalHours + 1, (index) {
                           final hour = startHour + index;
                           return Positioned(
-                            top: index * hourHeight - 8,
+                            top: index * _hourHeight - 8,
                             left: 0,
                             right: 0,
                             child: Text(
@@ -433,7 +483,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                             // Hour grid lines
                             ...List.generate(totalHours + 1, (index) {
                               return Positioned(
-                                top: index * hourHeight,
+                                top: index * _hourHeight,
                                 left: 0,
                                 right: 0,
                                 child: Container(
@@ -451,8 +501,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                               final startMinutes = (start.hour - startHour) * 60 + start.minute;
                               final durationMinutes = end.difference(start).inMinutes;
 
-                              final top = startMinutes * (hourHeight / 60);
-                              final height = durationMinutes * (hourHeight / 60);
+                              final top = startMinutes * (_hourHeight / 60);
+                              final height = durationMinutes * (_hourHeight / 60);
 
                               return Positioned(
                                 top: top,
@@ -536,7 +586,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   ],
                 ),
               ),
-            ),
+            ),  // SingleChildScrollView
+            ),  // GestureDetector
           ),
         ],
       ),

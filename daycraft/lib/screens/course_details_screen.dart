@@ -199,7 +199,40 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
                             final countdown = _countdown(item["date"]?.toString() ?? "");
                             final countdownColor = _countdownColor(countdown);
 
-                            return Container(
+                            return Dismissible(
+                              key: ValueKey(item['id'] ?? '${item['title']}_$index'),
+                              direction: DismissDirection.endToStart,
+                              background: Container(
+                                margin: const EdgeInsets.only(bottom: 14),
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 24),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.shade400,
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                child: const Icon(Icons.delete_rounded, color: Colors.white, size: 26),
+                              ),
+                              confirmDismiss: (_) async => await showDialog<bool>(
+                                context: context,
+                                builder: (_) => AlertDialog(
+                                  title: const Text("Delete Deadline"),
+                                  content: Text('Delete "${item["title"]}"?'),
+                                  actions: [
+                                    TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+                                    ElevatedButton(
+                                      onPressed: () => Navigator.pop(context, true),
+                                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                                      child: const Text("Delete"),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              onDismissed: (_) async {
+                                final docId = item['id'];
+                                setState(() => courseDeadlines.removeAt(index));
+                                if (docId != null) await StorageService.deleteDeadline(docId);
+                              },
+                              child: Container(
                               margin: const EdgeInsets.only(bottom: 14),
                               decoration: BoxDecoration(
                                 color: cardBg,
@@ -296,7 +329,8 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
                                   ],
                                 ),
                               ),
-                            );
+                            ), // Container (card)
+                            ); // Dismissible
                           },
                           childCount: courseDeadlines.length,
                         ),

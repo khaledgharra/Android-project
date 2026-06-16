@@ -24,13 +24,9 @@ class CoursesScreenState extends State<CoursesScreen> {
 
   bool _isSavingCourse = false;
 
-  String lectureDay = "Sunday";
-  TimeOfDay? lectureStart;
-  TimeOfDay? lectureEnd;
-
-  String tutorialDay = "Sunday";
-  TimeOfDay? tutorialStart;
-  TimeOfDay? tutorialEnd;
+  // Course events: each map has 'type', 'day', 'startCtrl' (TextEditingController), 'endCtrl' (TextEditingController)
+  List<Map<String, dynamic>> _courseEvents = [];
+  static const List<String> _eventTypes = ['Lecture', 'Tutorial', 'Workshop', 'Lab', 'Other'];
 
   final List<String> days = [
     "Sunday",
@@ -90,11 +86,6 @@ class CoursesScreenState extends State<CoursesScreen> {
                       children: [
                         Text("My Courses",
                             style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
-                        const SizedBox(height: 4),
-                        Text(
-                          courses.isEmpty ? "No courses yet" : "${courses.length} course${courses.length == 1 ? '' : 's'} this semester",
-                          style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
-                        ),
                       ],
                     ),
                   ),
@@ -238,22 +229,31 @@ class CoursesScreenState extends State<CoursesScreen> {
                             course["name"] ?? "",
                             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
                           ),
-                          if (course["lecture"] != null) ...[
-                            const SizedBox(height: 6),
-                            _scheduleChip(
-                              icon: Icons.cast_for_education_rounded,
-                              label: "${course["lecture"]["day"]}  ${course["lecture"]["start"]} – ${course["lecture"]["end"]}",
-                              color: courseColor,
-                            ),
-                          ],
-                          if (course["tutorial"] != null) ...[
-                            const SizedBox(height: 4),
-                            _scheduleChip(
-                              icon: Icons.people_rounded,
-                              label: "${course["tutorial"]["day"]}  ${course["tutorial"]["start"]} – ${course["tutorial"]["end"]}",
-                              color: courseColor,
-                            ),
-                          ],
+                          ...() {
+                            final result = <Widget>[];
+                            final events = course["events"];
+                            if (events is List && events.isNotEmpty) {
+                              for (final e in events.cast<Map>()) {
+                                final t = e['type'] as String? ?? 'Lecture';
+                                result.addAll([
+                                  const SizedBox(height: 4),
+                                  _scheduleChip(icon: _eventTypeIcon(t), label: "$t  ${e['day']}  ${e['start']} – ${e['end']}", color: _eventTypeColor(t)),
+                                ]);
+                              }
+                              return result;
+                            }
+                            // Backward compat: old lectures + tutorial format
+                            final rawLec = course["lectures"];
+                            final lectures = (rawLec is List && rawLec.isNotEmpty) ? rawLec.cast<Map>() : course["lecture"] != null ? [course["lecture"] as Map] : <Map>[];
+                            for (final lec in lectures) {
+                              result.addAll([const SizedBox(height: 4), _scheduleChip(icon: Icons.cast_for_education_rounded, label: "Lecture  ${lec['day']}  ${lec['start']} – ${lec['end']}", color: courseColor)]);
+                            }
+                            if (course["tutorial"] != null) {
+                              final t = course["tutorial"] as Map;
+                              result.addAll([const SizedBox(height: 4), _scheduleChip(icon: Icons.people_rounded, label: "Tutorial  ${t['day']}  ${t['start']} – ${t['end']}", color: Colors.teal)]);
+                            }
+                            return result;
+                          }(),
                         ],
                       ),
                     ),
@@ -404,99 +404,147 @@ class CoursesScreenState extends State<CoursesScreen> {
                       ),
                     ),
 
-                    // --- LECTURE SCHEDULE ---
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.grey.shade700.withOpacity(0.3)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text("Lecture", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.deepPurple)),
-                          const SizedBox(height: 10),
-                          // Day row
-                          _timeFieldRow(
-                            context: context,
-                            icon: Icons.calendar_today,
-                            label: "Day",
-                            value: lectureDay,
-                            onTap: () async {
-                              final picked = await showModalBottomSheet<String>(
-                                context: context,
-                                builder: (ctx) => _dayPickerSheet(ctx, days),
-                              );
-                              if (picked != null) setDialogState(() => lectureDay = picked);
-                            },
-                          ),
-                          const Divider(height: 16),
-                          // Time row — single tap chains start → end
-                          _timeFieldRow(
-                            context: context,
-                            icon: Icons.schedule_rounded,
-                            label: "Time",
-                            value: lectureStart != null && lectureEnd != null
-                                ? "${lectureStart!.format(context)} → ${lectureEnd!.format(context)}"
-                                : "Set time...",
-                            onTap: () async {
-                              final pickedStart = await showTimePicker(context: context, initialTime: lectureStart ?? const TimeOfDay(hour: 8, minute: 0), initialEntryMode: TimePickerEntryMode.inputOnly, helpText: "LECTURE START");
-                              if (pickedStart == null) return;
-                              setDialogState(() => lectureStart = pickedStart);
-                              final pickedEnd = await showTimePicker(context: context, initialTime: lectureEnd ?? pickedStart, initialEntryMode: TimePickerEntryMode.inputOnly, helpText: "LECTURE END");
-                              if (pickedEnd != null) setDialogState(() => lectureEnd = pickedEnd);
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-
+                    // --- COURSE EVENTS (lectures, tutorials, labs, workshops, etc.) ---
                     const SizedBox(height: 14),
-
-                    // --- TUTORIAL SCHEDULE ---
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.grey.shade700.withOpacity(0.3)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text("Tutorial (Optional)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.teal)),
-                          const SizedBox(height: 10),
-                          _timeFieldRow(
-                            context: context,
-                            icon: Icons.calendar_today,
-                            label: "Day",
-                            value: tutorialDay,
-                            onTap: () async {
-                              final picked = await showModalBottomSheet<String>(
-                                context: context,
-                                builder: (ctx) => _dayPickerSheet(ctx, days),
-                              );
-                              if (picked != null) setDialogState(() => tutorialDay = picked);
-                            },
-                          ),
-                          const Divider(height: 16),
-                          _timeFieldRow(
-                            context: context,
-                            icon: Icons.schedule_rounded,
-                            label: "Time",
-                            value: tutorialStart != null && tutorialEnd != null
-                                ? "${tutorialStart!.format(context)} → ${tutorialEnd!.format(context)}"
-                                : "Set time...",
-                            onTap: () async {
-                              final pickedStart = await showTimePicker(context: context, initialTime: tutorialStart ?? const TimeOfDay(hour: 8, minute: 0), initialEntryMode: TimePickerEntryMode.inputOnly, helpText: "TUTORIAL START");
-                              if (pickedStart == null) return;
-                              setDialogState(() => tutorialStart = pickedStart);
-                              final pickedEnd = await showTimePicker(context: context, initialTime: tutorialEnd ?? pickedStart, initialEntryMode: TimePickerEntryMode.inputOnly, helpText: "TUTORIAL END");
-                              if (pickedEnd != null) setDialogState(() => tutorialEnd = pickedEnd);
-                            },
-                          ),
-                        ],
+                    ..._courseEvents.asMap().entries.map((entry) {
+                      final i = entry.key;
+                      final lt = entry.value;
+                      final evtColor = _eventTypeColor(lt['type'] as String);
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: evtColor.withOpacity(0.3)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                // Type picker chip
+                                GestureDetector(
+                                  onTap: () async {
+                                    final picked = await showModalBottomSheet<String>(
+                                      context: context,
+                                      builder: (ctx) => SafeArea(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Padding(padding: EdgeInsets.all(14), child: Text("Event Type", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                                            ...CoursesScreenState._eventTypes.map((t) => ListTile(
+                                              leading: Icon(_eventTypeIcon(t), color: _eventTypeColor(t)),
+                                              title: Text(t),
+                                              onTap: () => Navigator.pop(ctx, t),
+                                            )),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                    if (picked != null) setDialogState(() => _courseEvents[i]['type'] = picked);
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                    decoration: BoxDecoration(color: evtColor.withOpacity(0.12), borderRadius: BorderRadius.circular(20)),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(_eventTypeIcon(lt['type'] as String), size: 13, color: evtColor),
+                                        const SizedBox(width: 4),
+                                        Text(lt['type'] as String, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: evtColor)),
+                                        const Icon(Icons.arrow_drop_down, size: 16, color: Colors.grey),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // Day picker chip
+                                GestureDetector(
+                                  onTap: () async {
+                                    final picked = await showModalBottomSheet<String>(
+                                      context: context,
+                                      builder: (ctx) => _dayPickerSheet(ctx, days),
+                                    );
+                                    if (picked != null) setDialogState(() => _courseEvents[i]['day'] = picked);
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                    decoration: BoxDecoration(color: Colors.grey.withOpacity(0.12), borderRadius: BorderRadius.circular(20)),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.calendar_today, size: 12, color: Colors.grey.shade600),
+                                        const SizedBox(width: 4),
+                                        Text(lt['day'] as String, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
+                                        const Icon(Icons.arrow_drop_down, size: 16, color: Colors.grey),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const Spacer(),
+                                if (_courseEvents.length > 1)
+                                  GestureDetector(
+                                    onTap: () => setDialogState(() => _courseEvents.removeAt(i)),
+                                    child: const Icon(Icons.close_rounded, size: 18, color: Colors.red),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: lt['startCtrl'] as TextEditingController,
+                                    decoration: InputDecoration(
+                                      labelText: "Start",
+                                      hintText: "09:00",
+                                      isDense: true,
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                      filled: true,
+                                      fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade700 : Colors.white,
+                                    ),
+                                    keyboardType: TextInputType.datetime,
+                                  ),
+                                ),
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 8),
+                                  child: Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.grey),
+                                ),
+                                Expanded(
+                                  child: TextField(
+                                    controller: lt['endCtrl'] as TextEditingController,
+                                    decoration: InputDecoration(
+                                      labelText: "End",
+                                      hintText: "10:30",
+                                      isDense: true,
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                      filled: true,
+                                      fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade700 : Colors.white,
+                                    ),
+                                    keyboardType: TextInputType.datetime,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () => setDialogState(() => _courseEvents.add({
+                          'type': 'Lecture',
+                          'day': 'Sunday',
+                          'startCtrl': TextEditingController(),
+                          'endCtrl': TextEditingController(),
+                        })),
+                        icon: const Icon(Icons.add_rounded, size: 16, color: Colors.deepPurple),
+                        label: const Text("Add Event", style: TextStyle(color: Colors.deepPurple, fontSize: 13, fontWeight: FontWeight.w600)),
+                        style: TextButton.styleFrom(padding: EdgeInsets.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
                       ),
                     ),
                   ],
@@ -532,20 +580,50 @@ class CoursesScreenState extends State<CoursesScreen> {
 
     selectedColor = Color(course["color"] ?? Colors.deepPurple.value);
 
-    if (course["lecture"] != null) {
-      lectureDay = course["lecture"]["day"];
-
-      lectureStart = parseTime(course["lecture"]["start"]);
-
-      lectureEnd = parseTime(course["lecture"]["end"]);
-    }
-
-    if (course["tutorial"] != null) {
-      tutorialDay = course["tutorial"]["day"];
-
-      tutorialStart = parseTime(course["tutorial"]["start"]);
-
-      tutorialEnd = parseTime(course["tutorial"]["end"]);
+    // Load events — support new "events" list and old "lectures"/"lecture" + "tutorial" formats
+    _courseEvents.clear();
+    final rawEvents = course["events"];
+    if (rawEvents is List && rawEvents.isNotEmpty) {
+      for (final e in rawEvents.cast<Map>()) {
+        _courseEvents.add({
+          'type': e['type'] ?? 'Lecture',
+          'day': e['day'] ?? 'Sunday',
+          'startCtrl': TextEditingController(text: e['start'] ?? ''),
+          'endCtrl': TextEditingController(text: e['end'] ?? ''),
+        });
+      }
+    } else {
+      final rawLectures = course["lectures"];
+      if (rawLectures is List && rawLectures.isNotEmpty) {
+        for (final l in rawLectures.cast<Map>()) {
+          _courseEvents.add({
+            'type': 'Lecture',
+            'day': l['day'] ?? 'Sunday',
+            'startCtrl': TextEditingController(text: l['start'] != null ? _todToStr(parseTime(l['start'])) : ''),
+            'endCtrl': TextEditingController(text: l['end'] != null ? _todToStr(parseTime(l['end'])) : ''),
+          });
+        }
+      } else if (course["lecture"] != null) {
+        final lec = course["lecture"] as Map;
+        _courseEvents.add({
+          'type': 'Lecture',
+          'day': lec['day'] ?? 'Sunday',
+          'startCtrl': TextEditingController(text: lec['start'] != null ? _todToStr(parseTime(lec['start'])) : ''),
+          'endCtrl': TextEditingController(text: lec['end'] != null ? _todToStr(parseTime(lec['end'])) : ''),
+        });
+      }
+      if (course["tutorial"] != null) {
+        final tut = course["tutorial"] as Map;
+        _courseEvents.add({
+          'type': 'Tutorial',
+          'day': tut['day'] ?? 'Sunday',
+          'startCtrl': TextEditingController(text: tut['start'] != null ? _todToStr(parseTime(tut['start'])) : ''),
+          'endCtrl': TextEditingController(text: tut['end'] != null ? _todToStr(parseTime(tut['end'])) : ''),
+        });
+      }
+      if (_courseEvents.isEmpty) {
+        _courseEvents.add({'type': 'Lecture', 'day': 'Sunday', 'startCtrl': TextEditingController(), 'endCtrl': TextEditingController()});
+      }
     }
 
     showAddCourseDialog();
@@ -702,25 +780,24 @@ class CoursesScreenState extends State<CoursesScreen> {
   Future<void> addCourse() async {
     if (_isSavingCourse) return;
     if (courseNameController.text.trim().isEmpty) return;
-
     _isSavingCourse = true;
 
     try {
       final loadedSchedule = await StorageService.loadSchedule();
 
       bool overlaps(String day, String start, String end) {
-        final startTime = parseTime(start);
-        final endTime = parseTime(end);
-        final newStart = startTime.hour * 60 + startTime.minute;
-        final newEnd = endTime.hour * 60 + endTime.minute;
-        return loadedSchedule.any((item) {
-          if (item["day"] != day || item["start"] == null || item["end"] == null) return false;
-          final existingStart = parseTime(item["start"]);
-          final existingEnd = parseTime(item["end"]);
-          final existingStartMin = existingStart.hour * 60 + existingStart.minute;
-          final existingEndMin = existingEnd.hour * 60 + existingEnd.minute;
-          return !(newEnd <= existingStartMin || newStart >= existingEndMin);
-        });
+        try {
+          final newStart = _parseAnyTimeToMinutes(start);
+          final newEnd = _parseAnyTimeToMinutes(end);
+          return loadedSchedule.any((item) {
+            if (item["day"] != day || item["start"] == null || item["end"] == null) return false;
+            try {
+              final es = _parseAnyTimeToMinutes(item["start"]);
+              final ee = _parseAnyTimeToMinutes(item["end"]);
+              return !(newEnd <= es || newStart >= ee);
+            } catch (_) { return false; }
+          });
+        } catch (_) { return false; }
       }
 
       String? oldCourseName;
@@ -734,50 +811,35 @@ class CoursesScreenState extends State<CoursesScreen> {
             (item["name"] == oldCourseName || item["courseName"] == oldCourseName));
       }
 
+      // Collect and validate events from controllers
+      final validEvents = <Map<String, String>>[];
+      for (final evt in _courseEvents) {
+        final startStr = (evt['startCtrl'] as TextEditingController).text.trim();
+        final endStr = (evt['endCtrl'] as TextEditingController).text.trim();
+        if (startStr.isEmpty || endStr.isEmpty) continue;
+        if (!RegExp(r'^\d{1,2}:\d{2}$').hasMatch(startStr) || !RegExp(r'^\d{1,2}:\d{2}$').hasMatch(endStr)) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Invalid time for ${evt['type']}: use HH:MM (e.g. 09:00)')));
+          return;
+        }
+        validEvents.add({'type': evt['type'] as String, 'day': evt['day'] as String, 'start': startStr, 'end': endStr});
+      }
+
       final course = {
-        "name": courseNameController.text,
+        "name": courseNameController.text.trim(),
         "type": "Course",
         "color": selectedColor.value,
-        "lecture": lectureStart != null && lectureEnd != null
-            ? {"day": lectureDay, "start": lectureStart!.format(context), "end": lectureEnd!.format(context)}
-            : null,
-        "tutorial": tutorialStart != null && tutorialEnd != null
-            ? {"day": tutorialDay, "start": tutorialStart!.format(context), "end": tutorialEnd!.format(context)}
-            : null,
+        "events": validEvents.isNotEmpty ? validEvents : null,
       };
 
-      // Validate overlaps BEFORE modifying anything
-      if (course["lecture"] != null) {
-        final lecture = course["lecture"] as Map<String, dynamic>;
-        if (overlaps(lecture["day"], lecture["start"], lecture["end"])) {
+      // Check overlaps
+      for (final evt in validEvents) {
+        if (overlaps(evt['day']!, evt['start']!, evt['end']!)) {
           final proceed = await showDialog<bool>(
             context: context,
             builder: (_) => AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               title: const Text("Time Conflict"),
-              content: Text("Lecture (${lecture["day"]}  ${lecture["start"]} – ${lecture["end"]}) overlaps with another schedule item."),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text("Add Anyway"),
-                ),
-              ],
-            ),
-          );
-          if (proceed != true) return;
-        }
-      }
-      if (course["tutorial"] != null) {
-        final tutorial = course["tutorial"] as Map<String, dynamic>;
-        if (overlaps(tutorial["day"], tutorial["start"], tutorial["end"])) {
-          final proceed = await showDialog<bool>(
-            context: context,
-            builder: (_) => AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              title: const Text("Time Conflict"),
-              content: Text("Tutorial (${tutorial["day"]}  ${tutorial["start"]} – ${tutorial["end"]}) overlaps with another schedule item."),
+              content: Text("${evt['type']} (${evt['day']}  ${evt['start']} – ${evt['end']}) overlaps with another item."),
               actions: [
                 TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
                 ElevatedButton(
@@ -792,31 +854,15 @@ class CoursesScreenState extends State<CoursesScreen> {
         }
       }
 
-      // All good — build the final schedule list
       loadedSchedule.add(course);
-
-      if (course["lecture"] != null) {
-        final lecture = course["lecture"] as Map<String, dynamic>;
+      for (final evt in validEvents) {
         loadedSchedule.add({
-          "title": "${course["name"]} Lecture",
+          "title": "${course["name"]} ${evt['type']}",
           "type": "Course",
           "courseName": course["name"],
-          "day": lecture["day"],
-          "start": lecture["start"],
-          "end": lecture["end"],
-          "color": course["color"],
-        });
-      }
-
-      if (course["tutorial"] != null) {
-        final tutorial = course["tutorial"] as Map<String, dynamic>;
-        loadedSchedule.add({
-          "title": "${course["name"]} Tutorial",
-          "type": "Course",
-          "courseName": course["name"],
-          "day": tutorial["day"],
-          "start": tutorial["start"],
-          "end": tutorial["end"],
+          "day": evt['day'],
+          "start": evt['start'],
+          "end": evt['end'],
           "color": course["color"],
         });
       }
@@ -982,15 +1028,38 @@ class CoursesScreenState extends State<CoursesScreen> {
     return Icons.school_rounded;
   }
 
+  String _todToStr(TimeOfDay tod) =>
+      '${tod.hour.toString().padLeft(2, '0')}:${tod.minute.toString().padLeft(2, '0')}';
+
+  int _parseAnyTimeToMinutes(String s) {
+    final s2 = s.trim();
+    final m = RegExp(r'^(\d{1,2}):(\d{2})$').firstMatch(s2);
+    if (m != null) return int.parse(m.group(1)!) * 60 + int.parse(m.group(2)!);
+    final tod = parseTime(s2);
+    return tod.hour * 60 + tod.minute;
+  }
+
+  IconData _eventTypeIcon(String type) {
+    switch (type) {
+      case 'Tutorial': return Icons.people_rounded;
+      case 'Workshop': return Icons.build_rounded;
+      case 'Lab': return Icons.science_rounded;
+      default: return Icons.cast_for_education_rounded;
+    }
+  }
+
+  Color _eventTypeColor(String type) {
+    switch (type) {
+      case 'Tutorial': return Colors.teal;
+      case 'Workshop': return Colors.orange;
+      case 'Lab': return Colors.green;
+      case 'Other': return Colors.blueGrey;
+      default: return Colors.deepPurple;
+    }
+  }
+
   void clearControllers() {
-    lectureStart = null;
-    lectureEnd = null;
-
-    tutorialStart = null;
-    tutorialEnd = null;
-
-    lectureDay = "Sunday";
-    tutorialDay = "Sunday";
+    _courseEvents = [{'type': 'Lecture', 'day': 'Sunday', 'startCtrl': TextEditingController(), 'endCtrl': TextEditingController()}];
 
     courseNameController.clear();
     isEditing = false;

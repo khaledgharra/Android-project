@@ -84,10 +84,9 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
       return;
     }
 
-    final selectedTasks = selectedIndices
-        .toList()
-        ..sort()
-        ..map((i) => generatedTasks[i]);
+    final selectedTasks = (selectedIndices.toList()..sort())
+        .map((i) => generatedTasks[i])
+        .toList();
 
     // Load current deadline data and add subtasks
     final deadlines = await StorageService.loadDeadlines();
@@ -113,7 +112,7 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text("✅ ${selectedTasks.length} tasks saved to deadline!"),
+        content: Text("✅ ${selectedIndices.length} tasks saved to deadline!"),
         backgroundColor: Colors.green,
       ),
     );
