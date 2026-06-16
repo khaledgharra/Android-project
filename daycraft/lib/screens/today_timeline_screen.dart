@@ -29,6 +29,9 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
   static const double timeColumnWidth = 45.0;
 
   final ScrollController _scrollController = ScrollController();
+  final TextEditingController _addEventTitleCtrl = TextEditingController();
+  final TextEditingController _addEventStartCtrl = TextEditingController();
+  final TextEditingController _addEventEndCtrl = TextEditingController();
 
   static const List<String> weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   static const List<String> fullDayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -105,6 +108,9 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
   void dispose() {
     _timeUpdateTimer?.cancel();
     _scrollController.dispose();
+    _addEventTitleCtrl.dispose();
+    _addEventStartCtrl.dispose();
+    _addEventEndCtrl.dispose();
     super.dispose();
   }
 
@@ -466,116 +472,134 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
 
   // =================== ADD EVENT DIALOG ===================
   void _showAddEventDialog() {
-    final titleController = TextEditingController();
+    _addEventTitleCtrl.clear();
+    _addEventStartCtrl.clear();
+    _addEventEndCtrl.clear();
     DateTime eventDate = selectedDate;
-    TimeOfDay? startTime;
-    TimeOfDay? endTime;
     String repeatMode = "once"; // "once" or "weekly"
 
     String _formatEventDate(DateTime date) {
-      final dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-      final monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+      const dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+      const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
       return "${dayNames[date.weekday - 1]}, ${date.day} ${monthNames[date.month - 1]}";
     }
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text("Add Event"),
-          content: SingleChildScrollView(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              TextField(
-                controller: titleController,
-                autofocus: true,
-                decoration: InputDecoration(
-                  hintText: "Event name...",
-                  filled: true, fillColor: Colors.grey.shade50,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+        builder: (context, setDialogState) {
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          final fillColor = isDark ? Colors.grey.shade800 : Colors.grey.shade50;
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Text("Add Event"),
+            content: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                TextField(
+                  controller: _addEventTitleCtrl,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    hintText: "Event name...",
+                    filled: true, fillColor: fillColor,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              // Date picker
-              GestureDetector(
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: eventDate,
-                    firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                    lastDate: DateTime(2030),
-                  );
-                  if (picked != null) setDialogState(() => eventDate = picked);
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.deepPurple.shade200)),
-                  child: Row(children: [
-                    const Icon(Icons.calendar_today, size: 16, color: Colors.deepPurple),
-                    const SizedBox(width: 10),
-                    Text(_formatEventDate(eventDate), style: const TextStyle(fontWeight: FontWeight.w600)),
-                    const Spacer(),
-                    const Icon(Icons.arrow_drop_down, color: Colors.grey),
-                  ]),
+                const SizedBox(height: 16),
+                // Date picker
+                GestureDetector(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: eventDate,
+                      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                      lastDate: DateTime(2030),
+                    );
+                    if (picked != null) setDialogState(() => eventDate = picked);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(color: fillColor, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.deepPurple.shade200)),
+                    child: Row(children: [
+                      const Icon(Icons.calendar_today, size: 16, color: Colors.deepPurple),
+                      const SizedBox(width: 10),
+                      Text(_formatEventDate(eventDate), style: const TextStyle(fontWeight: FontWeight.w600)),
+                      const Spacer(),
+                      const Icon(Icons.arrow_drop_down, color: Colors.grey),
+                    ]),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              // Repeat toggle
-              GestureDetector(
-                onTap: () {
-                  setDialogState(() => repeatMode = repeatMode == "once" ? "weekly" : "once");
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: repeatMode == "weekly" ? Colors.deepPurple.shade200 : Colors.grey.shade200)),
-                  child: Row(children: [
-                    Icon(Icons.repeat_rounded, size: 16, color: repeatMode == "weekly" ? Colors.deepPurple : Colors.grey),
-                    const SizedBox(width: 10),
-                    Text(repeatMode == "weekly" ? "Repeats every week" : "Once (this date only)", style: TextStyle(fontWeight: FontWeight.w600, color: repeatMode == "weekly" ? Colors.deepPurple : Colors.grey.shade700)),
-                    const Spacer(),
-                    Icon(repeatMode == "weekly" ? Icons.check_circle : Icons.circle_outlined, size: 20, color: repeatMode == "weekly" ? Colors.deepPurple : Colors.grey.shade400),
-                  ]),
+                const SizedBox(height: 12),
+                // Repeat toggle
+                GestureDetector(
+                  onTap: () {
+                    setDialogState(() => repeatMode = repeatMode == "once" ? "weekly" : "once");
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(color: fillColor, borderRadius: BorderRadius.circular(12), border: Border.all(color: repeatMode == "weekly" ? Colors.deepPurple.shade200 : Colors.grey.shade200)),
+                    child: Row(children: [
+                      Icon(Icons.repeat_rounded, size: 16, color: repeatMode == "weekly" ? Colors.deepPurple : Colors.grey),
+                      const SizedBox(width: 10),
+                      Text(repeatMode == "weekly" ? "Repeats every week" : "Once (this date only)", style: TextStyle(fontWeight: FontWeight.w600, color: repeatMode == "weekly" ? Colors.deepPurple : Colors.grey.shade700)),
+                      const Spacer(),
+                      Icon(repeatMode == "weekly" ? Icons.check_circle : Icons.circle_outlined, size: 20, color: repeatMode == "weekly" ? Colors.deepPurple : Colors.grey.shade400),
+                    ]),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              // Time picker — single tap chains start → end
-              GestureDetector(
-                onTap: () async {
-                  final pickedStart = await showTimePicker(context: context, initialTime: startTime ?? const TimeOfDay(hour: 8, minute: 0), initialEntryMode: TimePickerEntryMode.inputOnly, helpText: "START TIME");
-                  if (pickedStart == null) return;
-                  setDialogState(() => startTime = pickedStart);
-                  final pickedEnd = await showTimePicker(context: context, initialTime: endTime ?? pickedStart, initialEntryMode: TimePickerEntryMode.inputOnly, helpText: "END TIME");
-                  if (pickedEnd != null) setDialogState(() => endTime = pickedEnd);
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                  decoration: BoxDecoration(color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: (startTime != null && endTime != null) ? Colors.deepPurple.shade200 : Colors.grey.shade200)),
-                  child: Row(children: [
-                    Icon(Icons.schedule_rounded, size: 18, color: startTime != null ? Colors.deepPurple : Colors.grey),
-                    const SizedBox(width: 10),
-                    Text(
-                      startTime != null && endTime != null
-                          ? "${startTime!.format(context)}  →  ${endTime!.format(context)}"
-                          : startTime != null
-                              ? "${startTime!.format(context)}  →  End?"
-                              : "Set time...",
-                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: startTime != null ? Theme.of(context).colorScheme.onSurface : Colors.grey),
+                const SizedBox(height: 12),
+                // Start → End time text boxes (same as courses)
+                Row(children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _addEventStartCtrl,
+                      keyboardType: TextInputType.text,
+                      decoration: InputDecoration(
+                        labelText: "Start",
+                        hintText: "09:00",
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        filled: true,
+                        fillColor: fillColor,
+                      ),
                     ),
-                  ]),
-                ),
-              ),
-            ]),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-              onPressed: () async {
-                if (titleController.text.trim().isEmpty || startTime == null || endTime == null) return;
-                final dayName = _getDayName(eventDate.weekday);
-                final startStr = startTime!.format(context);
-                final endStr = endTime!.format(context);
-                if (_hasTimeOverlap(dayName, startStr, endStr)) {
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.grey),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _addEventEndCtrl,
+                      keyboardType: TextInputType.text,
+                      decoration: InputDecoration(
+                        labelText: "End",
+                        hintText: "10:30",
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        filled: true,
+                        fillColor: fillColor,
+                      ),
+                    ),
+                  ),
+                ]),
+              ]),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                onPressed: () async {
+                  final startStr = _addEventStartCtrl.text.trim();
+                  final endStr = _addEventEndCtrl.text.trim();
+                  if (_addEventTitleCtrl.text.trim().isEmpty || startStr.isEmpty || endStr.isEmpty) return;
+                  try { _parseTime(startStr); _parseTime(endStr); } catch (_) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Invalid time — use format like 09:00")));
+                    return;
+                  }
+                  final dayName = _getDayName(eventDate.weekday);
+                  if (_hasTimeOverlap(dayName, startStr, endStr)) {
                   final proceed = await showDialog<bool>(
                     context: context,
                     builder: (_) => AlertDialog(
@@ -596,11 +620,11 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
                 }
                 final dateStr = "${eventDate.year}-${eventDate.month.toString().padLeft(2, '0')}-${eventDate.day.toString().padLeft(2, '0')}";
                 final newItem = <String, dynamic>{
-                  "title": titleController.text.trim(),
+                  "title": _addEventTitleCtrl.text.trim(),
                   "type": "Activity",
                   "day": _getDayName(eventDate.weekday),
-                  "start": startTime!.format(context),
-                  "end": endTime!.format(context),
+                  "start": startStr,
+                  "end": endStr,
                   "repeat": repeatMode,
                   "date": dateStr,
                 };
@@ -614,8 +638,9 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
               child: const Text("Add"),
             ),
           ],
-        ),
-      ),
+        );   // end AlertDialog
+        }    // end StatefulBuilder block
+      ),     // end StatefulBuilder
     );
   }
 

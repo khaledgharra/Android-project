@@ -104,7 +104,6 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
       }
 
       await StorageService.updateDeadline(widget.deadlineId!, {
-        ...deadline,
         'subtasks': existingSubtasks,
       });
     }

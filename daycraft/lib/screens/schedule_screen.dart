@@ -171,112 +171,221 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }
 
   void showAddDialog() {
-    showDialog(
+    titleController.clear();
+    _startTimeCtrl.clear();
+    _endTimeCtrl.clear();
+    selectedType = "Activity";
+    selectedDay = currentViewDay;
+
+    showModalBottomSheet(
       context: context,
-      builder: (context) {
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
         return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text("Add Schedule"),
+          builder: (ctx, setSheetState) {
+            final isDark = Theme.of(ctx).brightness == Brightness.dark;
+            final fillColor = isDark ? Colors.grey.shade700 : Colors.white;
 
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-
-                  children: [
-                    TextField(
-                      controller: titleController,
-                      decoration: const InputDecoration(
-                        hintText: "Lecture / Gym / Prayer...",
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    DropdownButton<String>(
-                      value: selectedType,
-                      isExpanded: true,
-                      items: const [
-                        DropdownMenuItem(
-                          value: "Course",
-                          child: Text("Course"),
-                        ),
-                        DropdownMenuItem(
-                          value: "Activity",
-                          child: Text("Activity"),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        setDialogState(() {
-                          selectedType = value!;
-                        });
-                      },
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    DropdownButton<String>(
-                      value: selectedDay,
-                      isExpanded: true,
-
-                      items: days.map((day) {
-                        return DropdownMenuItem(value: day, child: Text(day));
-                      }).toList(),
-
-                      onChanged: (value) {
-                        setDialogState(() {
-                          selectedDay = value!;
-                        });
-                      },
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _startTimeCtrl,
-                            keyboardType: TextInputType.datetime,
-                            decoration: InputDecoration(
-                              labelText: "Start",
-                              hintText: "14:00",
-                              prefixIcon: const Icon(Icons.schedule_rounded, size: 18),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextField(
-                            controller: _endTimeCtrl,
-                            keyboardType: TextInputType.datetime,
-                            decoration: InputDecoration(
-                              labelText: "End",
-                              hintText: "15:30",
-                              prefixIcon: const Icon(Icons.schedule_rounded, size: 18),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+            Widget _chip({
+              required String label,
+              required IconData icon,
+              required Color color,
+              required VoidCallback onTap,
+            }) {
+              return GestureDetector(
+                onTap: onTap,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(icon, size: 13, color: color),
+                      const SizedBox(width: 4),
+                      Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
+                      const Icon(Icons.arrow_drop_down, size: 16, color: Colors.grey),
+                    ],
+                  ),
                 ),
+              );
+            }
+
+            IconData _typeIcon(String t) {
+              switch (t) {
+                case 'Course': return Icons.cast_for_education_rounded;
+                case 'Activity': return Icons.directions_run_rounded;
+                default: return Icons.category_rounded;
+              }
+            }
+
+            Color _typeColor(String t) =>
+                t == 'Course' ? Colors.deepPurple : Colors.teal;
+
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 24, right: 24, top: 24,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
               ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Row(
+                    children: [
+                      const Text("Add Event",
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () => Navigator.pop(ctx),
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
 
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
-                  child: const Text("Cancel"),
-                ),
+                  // Title
+                  TextField(
+                    controller: titleController,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      hintText: "Lecture / Gym / Prayer...",
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      filled: true,
+                      fillColor: fillColor,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
 
-                ElevatedButton(
-                  onPressed: addSchedule,
-                  child: const Text("Add"),
-                ),
-              ],
+                  // Type + Day chips
+                  Row(
+                    children: [
+                      _chip(
+                        label: selectedType,
+                        icon: _typeIcon(selectedType),
+                        color: _typeColor(selectedType),
+                        onTap: () async {
+                          FocusScope.of(ctx).unfocus();
+                          final picked = await showModalBottomSheet<String>(
+                            context: ctx,
+                            builder: (c) => SafeArea(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Padding(padding: EdgeInsets.all(14),
+                                      child: Text("Type", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                                  for (final t in ['Course', 'Activity'])
+                                    ListTile(
+                                      leading: Icon(_typeIcon(t), color: _typeColor(t)),
+                                      title: Text(t),
+                                      onTap: () => Navigator.pop(c, t),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                          if (picked != null) setSheetState(() => selectedType = picked);
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _chip(
+                        label: selectedDay,
+                        icon: Icons.calendar_today_rounded,
+                        color: Colors.grey.shade600,
+                        onTap: () async {
+                          FocusScope.of(ctx).unfocus();
+                          final picked = await showModalBottomSheet<String>(
+                            context: ctx,
+                            builder: (c) => SafeArea(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Padding(padding: EdgeInsets.all(14),
+                                      child: Text("Day", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                                  ...days.map((d) => ListTile(
+                                    title: Text(d),
+                                    onTap: () => Navigator.pop(c, d),
+                                  )),
+                                ],
+                              ),
+                            ),
+                          );
+                          if (picked != null) setSheetState(() => selectedDay = picked);
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Time row — same layout as course event time fields
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _startTimeCtrl,
+                          keyboardType: TextInputType.text,
+                          decoration: InputDecoration(
+                            labelText: "Start",
+                            hintText: "09:00",
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            filled: true,
+                            fillColor: fillColor,
+                          ),
+                        ),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8),
+                        child: Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.grey),
+                      ),
+                      Expanded(
+                        child: TextField(
+                          controller: _endTimeCtrl,
+                          keyboardType: TextInputType.text,
+                          decoration: InputDecoration(
+                            labelText: "End",
+                            hintText: "10:30",
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            filled: true,
+                            fillColor: fillColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Save button
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        await addSchedule();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.deepPurple,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      child: const Text("Add Event", style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                ],
+              ),
             );
           },
         );

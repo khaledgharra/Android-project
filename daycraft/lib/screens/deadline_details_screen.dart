@@ -18,6 +18,7 @@ class DeadlineDetailsScreen extends StatefulWidget {
 
 class _DeadlineDetailsScreenState extends State<DeadlineDetailsScreen> {
   final subtaskController = TextEditingController();
+  final _subtaskHoursController = TextEditingController();
   final _hoursController = TextEditingController();
   List<dynamic> subtasks = [];
   bool _savingHours = false;
@@ -32,6 +33,7 @@ class _DeadlineDetailsScreenState extends State<DeadlineDetailsScreen> {
   @override
   void dispose() {
     subtaskController.dispose();
+    _subtaskHoursController.dispose();
     _hoursController.dispose();
     super.dispose();
   }
@@ -55,7 +57,6 @@ class _DeadlineDetailsScreenState extends State<DeadlineDetailsScreen> {
 
     setState(() {
       subtasks = updatedDeadline?["subtasks"] ?? [];
-      // Sync hours if not yet set locally
       final remoteHours = updatedDeadline?['estimatedHours']?.toString() ?? '';
       if (_hoursController.text.isEmpty && remoteHours.isNotEmpty) {
         _hoursController.text = remoteHours;
@@ -63,16 +64,13 @@ class _DeadlineDetailsScreenState extends State<DeadlineDetailsScreen> {
     });
   }
 
+  // Only update the estimatedHours field — doesn't touch subtasks or other fields.
   Future<void> _saveHours() async {
     final docId = widget.deadline['id'];
     if (docId == null) return;
     final val = _hoursController.text.trim();
     setState(() => _savingHours = true);
-    await StorageService.updateDeadline(docId, {
-      ...widget.deadline,
-      'estimatedHours': val,
-      'subtasks': subtasks,
-    });
+    await StorageService.updateDeadline(docId, {'estimatedHours': val});
     if (!mounted) return;
     setState(() => _savingHours = false);
     ScaffoldMessenger.of(context).showSnackBar(
@@ -80,13 +78,11 @@ class _DeadlineDetailsScreenState extends State<DeadlineDetailsScreen> {
     );
   }
 
+  // Only update the subtasks field — prevents overwriting concurrent edits from other devices.
   Future<void> saveSubtasks() async {
     final docId = widget.deadline['id'];
     if (docId != null) {
-      await StorageService.updateDeadline(docId, {
-        ...widget.deadline,
-        "subtasks": subtasks,
-      });
+      await StorageService.updateDeadline(docId, {"subtasks": subtasks});
     } else {
       final deadlines = await StorageService.loadDeadlines();
       if (widget.deadlineIndex < deadlines.length) {
@@ -97,11 +93,18 @@ class _DeadlineDetailsScreenState extends State<DeadlineDetailsScreen> {
   }
 
   Future<void> addSubtask() async {
-    if (subtaskController.text.trim().isEmpty) return;
+    final title = subtaskController.text.trim();
+    if (title.isEmpty) return;
+    final hours = _subtaskHoursController.text.trim();
     setState(() {
-      subtasks.add({"title": subtaskController.text, "done": false});
+      subtasks.add({
+        "title": title,
+        "done": false,
+        if (hours.isNotEmpty) "hours": hours,
+      });
     });
     subtaskController.clear();
+    _subtaskHoursController.clear();
     await saveSubtasks();
   }
 
@@ -145,27 +148,7 @@ class _DeadlineDetailsScreenState extends State<DeadlineDetailsScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         heroTag: "deadline_details_fab",
-        onPressed: () {
-          showDialog(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text("Add Subtask"),
-              content: TextField(
-                controller: subtaskController,
-                autofocus: true,
-                decoration: const InputDecoration(hintText: "Study chapter 5..."),
-                onSubmitted: (_) async { await addSubtask(); Navigator.pop(context); },
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-                ElevatedButton(
-                  onPressed: () async { await addSubtask(); Navigator.pop(context); },
-                  child: const Text("Add"),
-                ),
-              ],
-            ),
-          );
-        },
+        onPressed: _showAddSubtaskDialog,
         child: const Icon(Icons.add),
       ),
       body: ListView(
@@ -252,9 +235,31 @@ class _DeadlineDetailsScreenState extends State<DeadlineDetailsScreen> {
           Row(children: [
             const Text('Subtasks', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const Spacer(),
-            if (subtasks.isNotEmpty)
+            if (subtasks.isNotEmpty) ...[
+              // Total hours summary across subtasks
+              () {
+                double total = 0;
+                for (final t in subtasks) {
+                  final h = double.tryParse(t['hours']?.toString() ?? '');
+                  if (h != null) total += h;
+                }
+                return total > 0
+                    ? Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(color: Colors.deepPurple.withOpacity(0.08), borderRadius: BorderRadius.circular(12)),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          const Icon(Icons.access_time_rounded, size: 11, color: Colors.deepPurple),
+                          const SizedBox(width: 3),
+                          Text('${total % 1 == 0 ? total.toInt() : total}h total',
+                              style: const TextStyle(fontSize: 11, color: Colors.deepPurple, fontWeight: FontWeight.w600)),
+                        ]),
+                      )
+                    : const SizedBox.shrink();
+              }(),
               Text('${subtasks.where((t) => t["done"] == true).length}/${subtasks.length} done',
                   style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+            ],
           ]),
 
           const SizedBox(height: 10),
@@ -275,6 +280,9 @@ class _DeadlineDetailsScreenState extends State<DeadlineDetailsScreen> {
           else
             ...List.generate(subtasks.length, (index) {
               final subtask = subtasks[index];
+              final isDone = subtask["done"] == true;
+              final hoursStr = subtask["hours"]?.toString() ?? '';
+
               return Dismissible(
                 key: ValueKey("${subtask['title']}_$index"),
                 direction: DismissDirection.endToStart,
@@ -294,13 +302,15 @@ class _DeadlineDetailsScreenState extends State<DeadlineDetailsScreen> {
                   decoration: BoxDecoration(
                     color: cardBg,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.grey.withOpacity(0.1)),
+                    border: Border.all(
+                      color: isDone ? Colors.green.withOpacity(0.25) : Colors.grey.withOpacity(0.1),
+                    ),
                     boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 2))],
                   ),
                   child: ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
                     leading: Checkbox(
-                      value: subtask["done"] ?? false,
+                      value: isDone,
                       activeColor: Colors.deepPurple,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                       onChanged: (value) async {
@@ -313,14 +323,105 @@ class _DeadlineDetailsScreenState extends State<DeadlineDetailsScreen> {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
-                        decoration: subtask["done"] == true ? TextDecoration.lineThrough : null,
-                        color: subtask["done"] == true ? Colors.grey.shade400 : null,
+                        decoration: isDone ? TextDecoration.lineThrough : null,
+                        color: isDone ? Colors.grey.shade400 : null,
                       ),
                     ),
+                    trailing: hoursStr.isNotEmpty
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: isDone
+                                  ? Colors.green.withOpacity(0.1)
+                                  : Colors.deepPurple.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.access_time_rounded, size: 11,
+                                    color: isDone ? Colors.green : Colors.deepPurple),
+                                const SizedBox(width: 3),
+                                Text('${hoursStr}h',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDone ? Colors.green : Colors.deepPurple,
+                                    )),
+                              ],
+                            ),
+                          )
+                        : null,
                   ),
                 ),
               );
             }),
+        ],
+      ),
+    );
+  }
+
+  void _showAddSubtaskDialog() {
+    subtaskController.clear();
+    _subtaskHoursController.clear();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final fill = isDark ? Colors.grey.shade800 : Colors.grey.shade50;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("Add Subtask"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: subtaskController,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: "Study chapter 5...",
+                filled: true,
+                fillColor: fill,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
+              onSubmitted: (_) async {
+                await addSubtask();
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _subtaskHoursController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                hintText: "Estimated hours (optional)",
+                filled: true,
+                fillColor: fill,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                suffixText: 'h',
+                prefixIcon: Icon(Icons.access_time_rounded, size: 18, color: Colors.grey.shade500),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepPurple,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () async {
+              await addSubtask();
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text("Add"),
+          ),
         ],
       ),
     );

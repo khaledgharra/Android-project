@@ -14,10 +14,23 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
   List<Map<String, dynamic>> courseDeadlines = [];
   bool isLoading = true;
 
+  // Add-deadline form state
+  final _titleCtrl = TextEditingController();
+  final _hoursCtrl = TextEditingController();
+  String _type = 'Homework';
+  DateTime? _date;
+
   @override
   void initState() {
     super.initState();
     loadCourseDeadlines();
+  }
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _hoursCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> loadCourseDeadlines() async {
@@ -101,13 +114,219 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
     return Icons.school_rounded;
   }
 
+  void _showAddDeadlineDialog() {
+    _titleCtrl.clear();
+    _hoursCtrl.clear();
+    _type = 'Homework';
+    _date = null;
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final fill = isDark ? Colors.grey.shade800 : Colors.grey.shade50;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(sheetCtx).viewInsets.bottom),
+        child: StatefulBuilder(
+          builder: (ctx, setSheet) => Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: SafeArea(
+              top: false,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40, height: 4,
+                        margin: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                      ),
+                    ),
+                    Text("Add Deadline — ${widget.courseName}",
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 16),
+
+                    // Title
+                    TextField(
+                      controller: _titleCtrl,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        hintText: "Assignment / Exam...",
+                        filled: true, fillColor: fill,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Date picker
+                    GestureDetector(
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: sheetCtx,
+                          initialDate: _date ?? DateTime.now(),
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime(2030),
+                        );
+                        if (picked != null) setSheet(() => _date = picked);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: fill,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _date != null ? Colors.deepPurple.shade200 : Colors.grey.shade600.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Row(children: [
+                          Icon(Icons.event_rounded, size: 18, color: _date != null ? Colors.deepPurple : Colors.grey),
+                          const SizedBox(width: 10),
+                          Text(
+                            _date != null
+                                ? "${_date!.day}/${_date!.month}/${_date!.year}"
+                                : "Set due date...",
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: _date != null ? Theme.of(context).colorScheme.onSurface : Colors.grey,
+                            ),
+                          ),
+                        ]),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Type picker
+                    GestureDetector(
+                      onTap: () async {
+                        final picked = await showModalBottomSheet<String>(
+                          context: sheetCtx,
+                          builder: (c) => SafeArea(
+                            child: Column(mainAxisSize: MainAxisSize.min, children: [
+                              const Padding(padding: EdgeInsets.all(12),
+                                  child: Text("Deadline Type", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                              ListTile(
+                                leading: const Icon(Icons.assignment, color: Colors.orange),
+                                title: const Text("Homework"),
+                                onTap: () => Navigator.pop(c, "Homework"),
+                              ),
+                              ListTile(
+                                leading: const Icon(Icons.school, color: Colors.red),
+                                title: const Text("Exam"),
+                                onTap: () => Navigator.pop(c, "Exam"),
+                              ),
+                            ]),
+                          ),
+                        );
+                        if (picked != null) setSheet(() => _type = picked);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: fill,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade600.withOpacity(0.3)),
+                        ),
+                        child: Row(children: [
+                          Icon(_typeIcon(_type), size: 16, color: _typeColor(_type)),
+                          const SizedBox(width: 10),
+                          Text(_type, style: const TextStyle(fontWeight: FontWeight.w600)),
+                          const Spacer(),
+                          const Icon(Icons.arrow_drop_down, color: Colors.grey),
+                        ]),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Estimated hours
+                    TextField(
+                      controller: _hoursCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: "Estimated Study Hours",
+                        filled: true, fillColor: fill,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Buttons
+                    Row(children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(sheetCtx),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: const Text("Cancel"),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.deepPurple,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: () async {
+                            if (_titleCtrl.text.trim().isEmpty || _date == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text("Please enter a title and date")),
+                              );
+                              return;
+                            }
+                            final newDeadline = {
+                              "title": _titleCtrl.text.trim(),
+                              "course": widget.courseName,
+                              "type": _type,
+                              "date": "${_date!.year}-${_date!.month.toString().padLeft(2, '0')}-${_date!.day.toString().padLeft(2, '0')}",
+                              "estimatedHours": _hoursCtrl.text.trim(),
+                            };
+                            await StorageService.addDeadline(newDeadline);
+                            if (!mounted) return;
+                            Navigator.pop(sheetCtx);
+                            await loadCourseDeadlines();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("Deadline added ✓")),
+                            );
+                          },
+                          child: const Text("Add"),
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 4),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final icon = _getCourseIcon();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardBg = Theme.of(context).cardColor;
 
     return Scaffold(
+      floatingActionButton: FloatingActionButton(
+        heroTag: "course_details_fab",
+        backgroundColor: Colors.deepPurple,
+        foregroundColor: Colors.white,
+        onPressed: _showAddDeadlineDialog,
+        child: const Icon(Icons.add_rounded),
+      ),
       body: CustomScrollView(
         slivers: [
           // ── Gradient App Bar ──
@@ -182,14 +401,14 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
                             Text("No deadlines for this course",
                                 style: TextStyle(fontSize: 16, color: Colors.grey.shade500)),
                             const SizedBox(height: 6),
-                            Text("Add one from the Courses tab",
+                            Text("Tap + to add one",
                                 style: TextStyle(fontSize: 13, color: Colors.grey.shade400)),
                           ],
                         ),
                       ),
                     )
                   : SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
+                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
                       sliver: SliverList(
                         delegate: SliverChildBuilderDelegate(
                           (context, index) {
@@ -198,6 +417,7 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
                             final typeColor = _typeColor(type);
                             final countdown = _countdown(item["date"]?.toString() ?? "");
                             final countdownColor = _countdownColor(countdown);
+                            final cardBg = Theme.of(context).cardColor;
 
                             return Dismissible(
                               key: ValueKey(item['id'] ?? '${item['title']}_$index'),
@@ -233,104 +453,112 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
                                 if (docId != null) await StorageService.deleteDeadline(docId);
                               },
                               child: Container(
-                              margin: const EdgeInsets.only(bottom: 14),
-                              decoration: BoxDecoration(
-                                color: cardBg,
-                                borderRadius: BorderRadius.circular(18),
-                                boxShadow: [
-                                  BoxShadow(color: typeColor.withOpacity(0.12), blurRadius: 12, offset: const Offset(0, 4)),
-                                ],
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(18),
-                                child: Stack(
-                                  children: [
-                                    Positioned.fill(
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            begin: Alignment.topLeft,
-                                            end: Alignment.bottomRight,
-                                            colors: [typeColor.withOpacity(0.08), typeColor.withOpacity(0.02)],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    Positioned(left: 0, top: 0, bottom: 0,
-                                      child: Container(
-                                        width: 4,
-                                        decoration: BoxDecoration(
-                                          color: typeColor,
-                                          borderRadius: const BorderRadius.only(
-                                            topLeft: Radius.circular(18), bottomLeft: Radius.circular(18),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    Padding(
-                                      padding: const EdgeInsets.fromLTRB(18, 14, 16, 14),
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            width: 44, height: 44,
-                                            decoration: BoxDecoration(
-                                              color: typeColor.withOpacity(0.12),
-                                              borderRadius: BorderRadius.circular(12),
-                                            ),
-                                            child: Icon(_typeIcon(type), color: typeColor, size: 22),
-                                          ),
-                                          const SizedBox(width: 14),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(item["title"] ?? "",
-                                                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                                                const SizedBox(height: 4),
-                                                Row(children: [
-                                                  Icon(Icons.event_rounded, size: 12, color: Colors.grey.shade500),
-                                                  const SizedBox(width: 4),
-                                                  Text(item["date"] ?? "",
-                                                      style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-                                                ]),
-                                              ],
-                                            ),
-                                          ),
-                                          Column(
-                                            crossAxisAlignment: CrossAxisAlignment.end,
-                                            children: [
-                                              // Type chip
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                                decoration: BoxDecoration(
-                                                  color: typeColor.withOpacity(0.12),
-                                                  borderRadius: BorderRadius.circular(20),
-                                                ),
-                                                child: Text(type,
-                                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: typeColor)),
-                                              ),
-                                              if (countdown.isNotEmpty) ...[
-                                                const SizedBox(height: 6),
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                                  decoration: BoxDecoration(
-                                                    color: countdownColor.withOpacity(0.12),
-                                                    borderRadius: BorderRadius.circular(20),
-                                                  ),
-                                                  child: Text(countdown,
-                                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: countdownColor)),
-                                                ),
-                                              ],
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
+                                margin: const EdgeInsets.only(bottom: 14),
+                                decoration: BoxDecoration(
+                                  color: cardBg,
+                                  borderRadius: BorderRadius.circular(18),
+                                  boxShadow: [
+                                    BoxShadow(color: typeColor.withOpacity(0.12), blurRadius: 12, offset: const Offset(0, 4)),
                                   ],
                                 ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(18),
+                                  child: Stack(
+                                    children: [
+                                      Positioned.fill(
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              begin: Alignment.topLeft,
+                                              end: Alignment.bottomRight,
+                                              colors: [typeColor.withOpacity(0.08), typeColor.withOpacity(0.02)],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        left: 0, top: 0, bottom: 0,
+                                        child: Container(
+                                          width: 4,
+                                          decoration: BoxDecoration(
+                                            color: typeColor,
+                                            borderRadius: const BorderRadius.only(
+                                              topLeft: Radius.circular(18),
+                                              bottomLeft: Radius.circular(18),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.fromLTRB(18, 14, 16, 14),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 44, height: 44,
+                                              decoration: BoxDecoration(
+                                                color: typeColor.withOpacity(0.12),
+                                                borderRadius: BorderRadius.circular(12),
+                                              ),
+                                              child: Icon(_typeIcon(type), color: typeColor, size: 22),
+                                            ),
+                                            const SizedBox(width: 14),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(item["title"] ?? "",
+                                                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                                                  const SizedBox(height: 4),
+                                                  Row(children: [
+                                                    Icon(Icons.event_rounded, size: 12, color: Colors.grey.shade500),
+                                                    const SizedBox(width: 4),
+                                                    Text(item["date"] ?? "",
+                                                        style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                                                    if (item["estimatedHours"] != null && item["estimatedHours"].toString().isNotEmpty) ...[
+                                                      const SizedBox(width: 8),
+                                                      Icon(Icons.access_time_rounded, size: 12, color: Colors.grey.shade500),
+                                                      const SizedBox(width: 4),
+                                                      Text("${item["estimatedHours"]}h",
+                                                          style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                                                    ],
+                                                  ]),
+                                                ],
+                                              ),
+                                            ),
+                                            Column(
+                                              crossAxisAlignment: CrossAxisAlignment.end,
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                  decoration: BoxDecoration(
+                                                    color: typeColor.withOpacity(0.12),
+                                                    borderRadius: BorderRadius.circular(20),
+                                                  ),
+                                                  child: Text(type,
+                                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: typeColor)),
+                                                ),
+                                                if (countdown.isNotEmpty) ...[
+                                                  const SizedBox(height: 6),
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                    decoration: BoxDecoration(
+                                                      color: countdownColor.withOpacity(0.12),
+                                                      borderRadius: BorderRadius.circular(20),
+                                                    ),
+                                                    child: Text(countdown,
+                                                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: countdownColor)),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
-                            ), // Container (card)
-                            ); // Dismissible
+                            );
                           },
                           childCount: courseDeadlines.length,
                         ),

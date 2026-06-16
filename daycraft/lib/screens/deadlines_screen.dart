@@ -14,7 +14,8 @@ class DeadlinesScreenState extends State<DeadlinesScreen> {
   List<String> availableCourses = ["None"];
   List<Map<String, dynamic>> _coursesList = [];
   final estimatedHoursController = TextEditingController();
-  String sortOption = "Date";
+  bool _selectMode = false;
+  final Set<String> _selectedIds = {};
   bool isEditing = false;
   int editingIndex = -1;
   List<Map<String, dynamic>> deadlines = [];
@@ -78,19 +79,44 @@ class DeadlinesScreenState extends State<DeadlinesScreen> {
   }
 
   void sortDeadlines() {
-    if (sortOption == "Date") {
-      deadlines.sort((a, b) {
-        final first = parseDeadlineDate(a["date"] ?? "");
-        final second = parseDeadlineDate(b["date"] ?? "");
-        if (first == null || second == null) return 0;
-        return first.compareTo(second);
-      });
-    } else {
-      deadlines.sort((a, b) {
-        final first = a["course"] ?? "";
-        final second = b["course"] ?? "";
-        return first.compareTo(second);
-      });
+    deadlines.sort((a, b) {
+      final first = parseDeadlineDate(a["date"] ?? "");
+      final second = parseDeadlineDate(b["date"] ?? "");
+      if (first == null || second == null) return 0;
+      return first.compareTo(second);
+    });
+  }
+
+  String _itemKey(Map<String, dynamic> item) =>
+      item['id']?.toString() ?? '${item['title']}_${item['date']}';
+
+  Future<void> _deleteSelected() async {
+    final toDelete = deadlines.where((d) => _selectedIds.contains(_itemKey(d))).toList();
+    if (toDelete.isEmpty) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Delete Deadlines"),
+        content: Text("Delete ${toDelete.length} deadline${toDelete.length == 1 ? '' : 's'}?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    setState(() {
+      deadlines.removeWhere((d) => _selectedIds.contains(_itemKey(d)));
+      _selectMode = false;
+      _selectedIds.clear();
+    });
+    for (final item in toDelete) {
+      final docId = item['id'];
+      if (docId != null) await StorageService.deleteDeadline(docId);
     }
   }
 
@@ -431,6 +457,152 @@ class DeadlinesScreenState extends State<DeadlinesScreen> {
       if (item['id'] != null) return d['id'] == item['id'];
       return d['title'] == item['title'] && d['date'] == item['date'];
     });
+    final key = _itemKey(item);
+    final isSelected = _selectedIds.contains(key);
+
+    final cardWidget = GestureDetector(
+      onTap: _selectMode
+          ? () => setState(() {
+                if (isSelected) _selectedIds.remove(key);
+                else _selectedIds.add(key);
+              })
+          : () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => DeadlineDetailsScreen(deadline: item, deadlineIndex: globalIndex)),
+              ),
+      onLongPress: _selectMode
+          ? null
+          : () => setState(() { _selectMode = true; _selectedIds.add(key); }),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(18),
+          border: isSelected ? Border.all(color: Colors.deepPurple, width: 2) : null,
+          boxShadow: [BoxShadow(color: cardColor.withOpacity(0.14), blurRadius: 14, offset: const Offset(0, 5))],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [cardColor.withOpacity(0.07), cardColor.withOpacity(0.01)],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 0, top: 0, bottom: 0,
+                child: Container(
+                  width: 4,
+                  decoration: BoxDecoration(
+                    color: cardColor,
+                    borderRadius: const BorderRadius.only(topLeft: Radius.circular(18), bottomLeft: Radius.circular(18)),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 44, height: 44,
+                          decoration: BoxDecoration(color: cardColor.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+                          child: Icon(getDeadlineIcon(type), color: cardColor, size: 22),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(item["title"] ?? "", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 3),
+                              Row(children: [
+                                Icon(Icons.event_rounded, size: 12, color: Colors.grey.shade500),
+                                const SizedBox(width: 4),
+                                Text(item["date"] ?? "", style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                                if (item["time"] != null && item["time"].toString().isNotEmpty) ...[
+                                  const SizedBox(width: 6),
+                                  Icon(Icons.access_time_rounded, size: 12, color: Colors.grey.shade500),
+                                  const SizedBox(width: 4),
+                                  Text(item["time"].toString(), style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                                ],
+                              ]),
+                            ],
+                          ),
+                        ),
+                        // Type chip or selection checkbox
+                        _selectMode
+                            ? Container(
+                                width: 24, height: 24,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isSelected ? Colors.deepPurple : Colors.transparent,
+                                  border: Border.all(color: isSelected ? Colors.deepPurple : Colors.grey.shade400, width: 2),
+                                ),
+                                child: isSelected ? const Icon(Icons.check_rounded, size: 14, color: Colors.white) : null,
+                              )
+                            : Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(color: typeColor, borderRadius: BorderRadius.circular(20)),
+                                child: Text(type, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                              ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        if (item["course"] != null && item["course"].toString().isNotEmpty) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(color: cardColor.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              Icon(Icons.school_rounded, size: 10, color: cardColor),
+                              const SizedBox(width: 4),
+                              Text(item["course"].toString(), style: TextStyle(fontSize: 11, color: cardColor, fontWeight: FontWeight.w600)),
+                            ]),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                        if (item["estimatedHours"] != null && item["estimatedHours"].toString().isNotEmpty) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(20)),
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              Icon(Icons.access_time_rounded, size: 10, color: Colors.grey.shade600),
+                              const SizedBox(width: 4),
+                              Text("${item["estimatedHours"]}h prep", style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
+                            ]),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                        if (countdown.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(color: countdownColor.withOpacity(0.12), borderRadius: BorderRadius.circular(20)),
+                            child: Text(countdown, style: TextStyle(fontSize: 11, color: countdownColor, fontWeight: FontWeight.w700)),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (_selectMode) return cardWidget;
 
     return Dismissible(
       key: ValueKey('${item['id'] ?? item['title']}_${item['date']}'),
@@ -449,154 +621,23 @@ class DeadlinesScreenState extends State<DeadlinesScreen> {
           ],
         ),
       ),
-      confirmDismiss: (_) async {
-        return await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text("Delete Deadline"),
-            content: Text('Delete "${item["title"]}"?'),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-                child: const Text("Delete"),
-              ),
-            ],
-          ),
-        );
-      },
-      onDismissed: (_) => _deleteDeadlineItem(item),
-      child: GestureDetector(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => DeadlineDetailsScreen(deadline: item, deadlineIndex: globalIndex)),
-        ),
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 14),
-          decoration: BoxDecoration(
-            color: cardBg,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [BoxShadow(color: cardColor.withOpacity(0.14), blurRadius: 14, offset: const Offset(0, 5))],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(18),
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [cardColor.withOpacity(0.07), cardColor.withOpacity(0.01)],
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: 0, top: 0, bottom: 0,
-                  child: Container(
-                    width: 4,
-                    decoration: BoxDecoration(
-                      color: cardColor,
-                      borderRadius: const BorderRadius.only(topLeft: Radius.circular(18), bottomLeft: Radius.circular(18)),
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 44, height: 44,
-                            decoration: BoxDecoration(color: cardColor.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
-                            child: Icon(getDeadlineIcon(type), color: cardColor, size: 22),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(item["title"] ?? "", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                                const SizedBox(height: 3),
-                                Row(children: [
-                                  Icon(Icons.event_rounded, size: 12, color: Colors.grey.shade500),
-                                  const SizedBox(width: 4),
-                                  Text(item["date"] ?? "", style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-                                  if (item["time"] != null && item["time"].toString().isNotEmpty) ...[
-                                    const SizedBox(width: 6),
-                                    Icon(Icons.access_time_rounded, size: 12, color: Colors.grey.shade500),
-                                    const SizedBox(width: 4),
-                                    Text(item["time"].toString(), style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-                                  ],
-                                ]),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(color: typeColor, borderRadius: BorderRadius.circular(20)),
-                            child: Text(type, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          if (item["course"] != null && item["course"].toString().isNotEmpty) ...[
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(color: cardColor.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-                              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                                Icon(Icons.school_rounded, size: 10, color: cardColor),
-                                const SizedBox(width: 4),
-                                Text(item["course"].toString(), style: TextStyle(fontSize: 11, color: cardColor, fontWeight: FontWeight.w600)),
-                              ]),
-                            ),
-                            const SizedBox(width: 6),
-                          ],
-                          if (item["estimatedHours"] != null && item["estimatedHours"].toString().isNotEmpty) ...[
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(20)),
-                              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                                Icon(Icons.access_time_rounded, size: 10, color: Colors.grey.shade600),
-                                const SizedBox(width: 4),
-                                Text("${item["estimatedHours"]}h prep", style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
-                              ]),
-                            ),
-                            const SizedBox(width: 6),
-                          ],
-                          if (countdown.isNotEmpty)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(color: countdownColor.withOpacity(0.12), borderRadius: BorderRadius.circular(20)),
-                              child: Text(countdown, style: TextStyle(fontSize: 11, color: countdownColor, fontWeight: FontWeight.w700)),
-                            ),
-                          const Spacer(),
-                          GestureDetector(
-                            onTap: () => showEditDeadlineDialog(item),
-                            child: Container(
-                              width: 32, height: 32,
-                              decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                              child: const Icon(Icons.edit_rounded, size: 16, color: Colors.blue),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+      confirmDismiss: (_) async => await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text("Delete Deadline"),
+          content: Text('Delete "${item["title"]}"?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+              child: const Text("Delete"),
             ),
-          ),
+          ],
         ),
       ),
+      onDismissed: (_) => _deleteDeadlineItem(item),
+      child: cardWidget,
     );
   }
 
@@ -637,41 +678,65 @@ class DeadlinesScreenState extends State<DeadlinesScreen> {
       length: 3,
       child: Scaffold(
         appBar: AppBar(
-          title: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text("Deadlines"),
-              const SizedBox(width: 8),
-              if (deadlines.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(color: Colors.deepPurple, borderRadius: BorderRadius.circular(12)),
-                  child: Text('${deadlines.length}', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+          title: _selectMode
+              ? Text('${_selectedIds.length} selected',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600))
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text("Deadlines"),
+                    const SizedBox(width: 8),
+                    if (deadlines.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(color: Colors.deepPurple, borderRadius: BorderRadius.circular(12)),
+                        child: Text('${deadlines.length}', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                  ],
                 ),
-            ],
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.auto_awesome_rounded, color: Colors.deepPurple),
-              tooltip: 'AI Schedule Planner',
-              onPressed: () async {
-                final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AISchedulePlannerScreen()),
-                );
-                if (result == true) _loadAll();
-              },
-            ),
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.sort_rounded),
-              onSelected: (value) => setState(() { sortOption = value; sortDeadlines(); }),
-              itemBuilder: (_) => [
-                const PopupMenuItem(value: "Date", child: Text("Sort by Date")),
-                const PopupMenuItem(value: "Course", child: Text("Sort by Course")),
-              ],
-            ),
-            const SizedBox(width: 4),
-          ],
+          actions: _selectMode
+              ? [
+                  if (_selectedIds.length == 1)
+                    IconButton(
+                      icon: const Icon(Icons.edit_rounded, color: Colors.blue),
+                      tooltip: 'Edit',
+                      onPressed: () {
+                        final item = deadlines.firstWhere((d) => _itemKey(d) == _selectedIds.first, orElse: () => {});
+                        if (item.isEmpty) return;
+                        setState(() { _selectMode = false; _selectedIds.clear(); });
+                        showEditDeadlineDialog(item);
+                      },
+                    ),
+                  if (_selectedIds.isNotEmpty)
+                    IconButton(
+                      icon: const Icon(Icons.delete_rounded, color: Colors.red),
+                      tooltip: 'Delete',
+                      onPressed: _deleteSelected,
+                    ),
+                  TextButton(
+                    onPressed: () => setState(() { _selectMode = false; _selectedIds.clear(); }),
+                    child: const Text('Cancel'),
+                  ),
+                ]
+              : [
+                  IconButton(
+                    icon: const Icon(Icons.auto_awesome_rounded, color: Colors.deepPurple),
+                    tooltip: 'AI Schedule Planner',
+                    onPressed: () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const AISchedulePlannerScreen()),
+                      );
+                      if (result == true) _loadAll();
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.checklist_rounded),
+                    tooltip: 'Select',
+                    onPressed: () => setState(() { _selectMode = true; _selectedIds.clear(); }),
+                  ),
+                  const SizedBox(width: 4),
+                ],
           bottom: TabBar(
             labelColor: Colors.deepPurple,
             unselectedLabelColor: Colors.grey,
@@ -684,7 +749,7 @@ class DeadlinesScreenState extends State<DeadlinesScreen> {
             ],
           ),
         ),
-        floatingActionButton: FloatingActionButton(
+        floatingActionButton: _selectMode ? null : FloatingActionButton(
           heroTag: "deadlines_fab",
           onPressed: () { clearDeadlineState(); showAddDialog(); },
           child: const Icon(Icons.add_rounded),

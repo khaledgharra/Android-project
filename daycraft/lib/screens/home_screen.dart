@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 import 'deadlines_screen.dart';
 import 'courses_screen.dart';
 import 'today_timeline_screen.dart';
 import 'settings_screen.dart';
-import 'login_screen.dart';
+import 'semester_screen.dart';
 import '../services/auth_service.dart';
 import '../services/storage_service.dart';
 
@@ -26,10 +24,10 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Map<String, dynamic>> _sortedTodaySchedule = [];
 
   List<Map<String, dynamic>> _reminders = [];
-  static const String _remindersKey = 'user_reminders';
 
   Set<String> _completedItemIds = {};
-  static const String _completedTasksKey = 'completed_tasks_ids';
+
+  String _currentSemesterName = '';
 
   final GlobalKey<TodayTimelineScreenState> _calendarKey = GlobalKey<TodayTimelineScreenState>();
   final GlobalKey<CoursesScreenState> _coursesKey = GlobalKey<CoursesScreenState>();
@@ -38,17 +36,13 @@ class _HomeScreenState extends State<HomeScreen> {
   late final List<Widget> _screens;
 
   Future<void> _loadReminders() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_remindersKey);
+    final reminders = await StorageService.loadReminders();
     if (!mounted) return;
-    setState(() {
-      _reminders = raw == null ? [] : List<Map<String, dynamic>>.from(jsonDecode(raw));
-    });
+    setState(() => _reminders = reminders);
   }
 
   Future<void> _saveReminders() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_remindersKey, jsonEncode(_reminders));
+    await StorageService.saveReminders(_reminders);
   }
 
   void _showRemindersSheet() {
@@ -69,14 +63,63 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _loadReminders();
-    _loadDashboardStats();
     _screens = [
       const SizedBox.shrink(),
       TodayTimelineScreen(key: _calendarKey),
       CoursesScreen(key: _coursesKey),
       DeadlinesScreen(key: _deadlinesKey),
     ];
+    // Needs context for navigation, defer until after first frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initSemester());
+  }
+
+  Future<void> _initSemester() async {
+    final activeId = await StorageService.loadActiveSemesterId();
+    if (activeId != null && activeId.isNotEmpty) {
+      StorageService.currentSemesterId = activeId;
+      final semesters = await StorageService.loadSemesters();
+      final sem = semesters.firstWhere(
+        (s) => s['id'] == activeId,
+        orElse: () => <String, dynamic>{},
+      );
+      if (mounted) {
+        setState(() => _currentSemesterName = (sem['name'] as String?) ?? '');
+      }
+      _loadReminders();
+      _loadDashboardStats();
+    } else {
+      // First launch or no semester — force selection.
+      if (!mounted) return;
+      final result = await Navigator.of(context).push<Map<String, dynamic>>(
+        MaterialPageRoute(builder: (_) => const SemesterScreen(required: true)),
+      );
+      if (result != null && mounted) {
+        setState(() => _currentSemesterName = (result['name'] as String?) ?? '');
+        _loadReminders();
+        _loadDashboardStats();
+      }
+    }
+  }
+
+  Future<void> _switchSemester() async {
+    final result = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(builder: (_) => const SemesterScreen()),
+    );
+    if (result == null || !mounted) return;
+    // Clear stale state immediately so the UI doesn't flash old data.
+    setState(() {
+      _currentSemesterName = (result['name'] as String?) ?? '';
+      _completedItemIds = {};
+      _reminders = [];
+      _sortedTodaySchedule = [];
+      _upcomingDeadlinesCount = 0;
+      _activeCoursesCount = 0;
+    });
+    _loadReminders();
+    _loadDashboardStats();
+    _calendarKey.currentState?.loadTodayEvents();
+    _coursesKey.currentState?.loadCourses();
+    _deadlinesKey.currentState?.loadDeadlines();
   }
 
   bool _isItemForToday(Map<String, dynamic> item, DateTime today) {
@@ -109,8 +152,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final rawSchedule = results[0] as List;
       final rawDeadlines = results[1] as List;
 
-      final prefs = await SharedPreferences.getInstance();
-      final List<String> savedCompletedList = prefs.getStringList(_completedTasksKey) ?? [];
+      final savedCompletedList = await StorageService.loadCompletedTaskIds();
 
       final now = DateTime.now();
       final todayMidnight = DateTime(now.year, now.month, now.day);
@@ -176,19 +218,20 @@ class _HomeScreenState extends State<HomeScreen> {
       courses: _activeCoursesCount,
       scheduleList: _sortedTodaySchedule,
       completedIds: _completedItemIds,
+      semesterName: _currentSemesterName,
       onRefreshProfile: _loadDashboardStats,
       onDeadlinesTap: () => _onTabTapped(3),
       onCoursesTap: () => _onTabTapped(2),
       onScheduleTap: () => _onTabTapped(1),
       onRemindersTap: _showRemindersSheet,
+      onSwitchSemester: _switchSemester,
       onToggleDone: (id, isChecked) async {
         setState(() {
           if (isChecked) _completedItemIds.add(id);
           else _completedItemIds.remove(id);
         });
         try {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setStringList(_completedTasksKey, _completedItemIds.toList());
+          await StorageService.saveCompletedTaskIds(_completedItemIds.toList());
         } catch (e) {
           debugPrint("Failed to persist task state: $e");
         }
@@ -228,11 +271,13 @@ class _DashboardTabContent extends StatelessWidget {
   final int courses;
   final List<Map<String, dynamic>> scheduleList;
   final Set<String> completedIds;
+  final String semesterName;
   final VoidCallback onRefreshProfile;
   final VoidCallback onDeadlinesTap;
   final VoidCallback onCoursesTap;
   final VoidCallback onScheduleTap;
   final VoidCallback onRemindersTap;
+  final VoidCallback onSwitchSemester;
   final Function(String, bool) onToggleDone;
 
   const _DashboardTabContent({
@@ -242,11 +287,13 @@ class _DashboardTabContent extends StatelessWidget {
     required this.courses,
     required this.scheduleList,
     required this.completedIds,
+    required this.semesterName,
     required this.onRefreshProfile,
     required this.onDeadlinesTap,
     required this.onCoursesTap,
     required this.onScheduleTap,
     required this.onRemindersTap,
+    required this.onSwitchSemester,
     required this.onToggleDone,
   });
 
@@ -326,36 +373,44 @@ class _DashboardTabContent extends StatelessWidget {
                           _getFormattedDate(),
                           style: const TextStyle(fontSize: 12, color: Colors.white54),
                         ),
+                        const SizedBox(height: 8),
+                        GestureDetector(
+                          onTap: onSwitchSemester,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.school_rounded, size: 13, color: Colors.white70),
+                                const SizedBox(width: 5),
+                                Text(
+                                  semesterName.isNotEmpty ? semesterName : 'Select Semester',
+                                  style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w500),
+                                ),
+                                const SizedBox(width: 4),
+                                const Icon(Icons.expand_more_rounded, size: 14, color: Colors.white70),
+                              ],
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
                   // Avatar + action icons
                   Column(
                     children: [
-                      Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.settings_rounded, color: Colors.white70, size: 22),
-                            onPressed: () async {
-                              await Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                              );
-                              onRefreshProfile();
-                            },
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.logout_rounded, color: Colors.white70, size: 22),
-                            onPressed: () async {
-                              await AuthService.signOut();
-                              if (context.mounted) {
-                                Navigator.of(context).pushAndRemoveUntil(
-                                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                                  (route) => false,
-                                );
-                              }
-                            },
-                          ),
-                        ],
+                      IconButton(
+                        icon: const Icon(Icons.settings_rounded, color: Colors.white70, size: 22),
+                        onPressed: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                          );
+                          onRefreshProfile();
+                        },
                       ),
                       CircleAvatar(
                         radius: 22,
@@ -433,13 +488,13 @@ class _DashboardTabContent extends StatelessWidget {
 
         const SizedBox(height: 28),
 
-        // ── Today's Schedule ──
+        // ── Today's Tasks ──
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("Today's Schedule",
+              Text("Today's Tasks",
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: onSurface)),
               GestureDetector(
                 onTap: onScheduleTap,

@@ -10,12 +10,6 @@ class CoursesScreen extends StatefulWidget {
 }
 
 class CoursesScreenState extends State<CoursesScreen> {
-  final deadlineTitleController = TextEditingController();
-  final deadlineEstimatedHoursController = TextEditingController();
-
-  DateTime? selectedDeadlineDate;
-
-  String selectedDeadlineType = "Homework";
   List<Map<String, dynamic>> courses = [];
   final courseNameController = TextEditingController();
   Color selectedColor = Colors.deepPurple;
@@ -27,6 +21,9 @@ class CoursesScreenState extends State<CoursesScreen> {
   // Course events: each map has 'type', 'day', 'startCtrl' (TextEditingController), 'endCtrl' (TextEditingController)
   List<Map<String, dynamic>> _courseEvents = [];
   static const List<String> _eventTypes = ['Lecture', 'Tutorial', 'Workshop', 'Lab', 'Other'];
+
+  bool _selectMode = false;
+  final Set<String> _selectedNames = {};
 
   final List<String> days = [
     "Sunday",
@@ -41,7 +38,22 @@ class CoursesScreenState extends State<CoursesScreen> {
   @override
   void initState() {
     super.initState();
+    clearControllers();
     loadCourses();
+  }
+
+  @override
+  void dispose() {
+    courseNameController.dispose();
+    _disposeEventControllers();
+    super.dispose();
+  }
+
+  void _disposeEventControllers() {
+    for (final evt in _courseEvents) {
+      (evt['startCtrl'] as TextEditingController?)?.dispose();
+      (evt['endCtrl'] as TextEditingController?)?.dispose();
+    }
   }
 
   Future<void> loadCourses() async {
@@ -60,7 +72,7 @@ class CoursesScreenState extends State<CoursesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: _selectMode ? null : FloatingActionButton(
         heroTag: "courses_fab",
         onPressed: () {
           clearControllers();
@@ -76,31 +88,63 @@ class CoursesScreenState extends State<CoursesScreen> {
           children: [
             // ── Header ──
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+              padding: const EdgeInsets.fromLTRB(24, 20, 16, 0),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text("My Courses",
+                    child: _selectMode
+                        ? Text(
+                            '${_selectedNames.length} selected',
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+                          )
+                        : Text("My Courses",
                             style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
-                      ],
-                    ),
                   ),
-                  if (courses.isNotEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.deepPurple.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
+                  if (_selectMode) ...[
+                    if (_selectedNames.length == 1)
+                      IconButton(
+                        icon: const Icon(Icons.edit_rounded, color: Colors.blue),
+                        tooltip: 'Edit',
+                        onPressed: () {
+                          final idx = courses.indexWhere((c) => c["name"]?.toString() == _selectedNames.first);
+                          if (idx < 0) return;
+                          setState(() { _selectMode = false; _selectedNames.clear(); });
+                          clearControllers();
+                          showEditCourseDialog(courses[idx], idx);
+                        },
                       ),
-                      child: Text(
-                        "${courses.length}",
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.deepPurple),
+                    if (_selectedNames.isNotEmpty)
+                      IconButton(
+                        icon: const Icon(Icons.delete_rounded, color: Colors.red),
+                        tooltip: 'Delete',
+                        onPressed: _deleteSelectedCourses,
                       ),
+                    TextButton(
+                      onPressed: () => setState(() { _selectMode = false; _selectedNames.clear(); }),
+                      child: const Text('Cancel'),
                     ),
+                  ] else ...[
+                    if (courses.isNotEmpty) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.deepPurple.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          "${courses.length}",
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.deepPurple),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      IconButton(
+                        icon: const Icon(Icons.checklist_rounded, color: Colors.deepPurple),
+                        tooltip: 'Select',
+                        onPressed: () => setState(() { _selectMode = true; _selectedNames.clear(); }),
+                      ),
+                    ],
+                  ],
                 ],
               ),
             ),
@@ -148,21 +192,28 @@ class CoursesScreenState extends State<CoursesScreen> {
     final course = courses[index];
     final courseColor = Color(course["color"] ?? Colors.deepPurple.value);
     final themeIcon = _getCourseTheme(course["name"] ?? "");
+    final courseName = course["name"]?.toString() ?? '';
+    final isSelected = _selectedNames.contains(courseName);
 
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => CourseDetailsScreen(courseName: course["name"]),
-          ),
-        );
-      },
+      onTap: _selectMode
+          ? () => setState(() {
+                if (isSelected) _selectedNames.remove(courseName);
+                else _selectedNames.add(courseName);
+              })
+          : () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => CourseDetailsScreen(courseName: course["name"])),
+              ),
+      onLongPress: _selectMode
+          ? null
+          : () => setState(() { _selectMode = true; _selectedNames.add(courseName); }),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
         decoration: BoxDecoration(
           color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(22),
+          border: isSelected ? Border.all(color: Colors.deepPurple, width: 2) : null,
           boxShadow: [
             BoxShadow(color: courseColor.withOpacity(0.18), blurRadius: 16, offset: const Offset(0, 5)),
             BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2)),
@@ -257,54 +308,18 @@ class CoursesScreenState extends State<CoursesScreen> {
                         ],
                       ),
                     ),
-                    // Actions
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _actionButton(Icons.assignment_rounded, Colors.deepPurple, () => showAddDeadlineDialog(course)),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _actionButton(Icons.edit_rounded, Colors.blue, () {
-                              clearControllers();
-                              showEditCourseDialog(course, index);
-                            }),
-                            _actionButton(Icons.delete_rounded, Colors.red, () async {
-                              final confirm = await showDialog<bool>(
-                                context: context,
-                                builder: (_) => AlertDialog(
-                                  title: const Text("Delete Course"),
-                                  content: Text("Delete \"${course["name"]}\"?"),
-                                  actions: [
-                                    TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
-                                    ElevatedButton(
-                                      onPressed: () => Navigator.pop(context, true),
-                                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                                      child: const Text("Delete"),
-                                    ),
-                                  ],
-                                ),
-                              );
-                              if (confirm != true) return;
-                              setState(() => courses.removeAt(index));
-                              // Delete schedule items for this course
-                              final loaded = await StorageService.loadSchedule();
-                              loaded.removeWhere((item) =>
-                                item["type"] == "Course" &&
-                                (item["name"] == course["name"] || item["courseName"] == course["name"]));
-                              await StorageService.saveSchedule(loaded);
-                              // Delete all deadlines belonging to this course
-                              final deadlines = await StorageService.loadDeadlines();
-                              for (final d in deadlines) {
-                                if (d["course"] == course["name"] && d["id"] != null) {
-                                  await StorageService.deleteDeadline(d["id"]);
-                                }
-                              }
-                            }),
-                          ],
+                    // Checkbox in select mode only
+                    if (_selectMode)
+                      Container(
+                        width: 24, height: 24,
+                        margin: const EdgeInsets.only(right: 8),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: isSelected ? Colors.deepPurple : Colors.transparent,
+                          border: Border.all(color: isSelected ? Colors.deepPurple : Colors.grey.shade400, width: 2),
                         ),
-                      ],
-                    ),
+                        child: isSelected ? const Icon(Icons.check_rounded, size: 14, color: Colors.white) : null,
+                      ),
                   ],
                 ),
               ),
@@ -343,6 +358,7 @@ class CoursesScreenState extends State<CoursesScreen> {
   void showAddCourseDialog() {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
@@ -364,6 +380,7 @@ class CoursesScreenState extends State<CoursesScreen> {
                     const SizedBox(height: 20),
                     GestureDetector(
                       onTap: () async {
+                        FocusScope.of(context).unfocus();
                         final picked = await showModalBottomSheet<Color>(
                           context: context,
                           shape: const RoundedRectangleBorder(
@@ -426,6 +443,7 @@ class CoursesScreenState extends State<CoursesScreen> {
                                 // Type picker chip
                                 GestureDetector(
                                   onTap: () async {
+                                    FocusScope.of(context).unfocus();
                                     final picked = await showModalBottomSheet<String>(
                                       context: context,
                                       builder: (ctx) => SafeArea(
@@ -462,6 +480,7 @@ class CoursesScreenState extends State<CoursesScreen> {
                                 // Day picker chip
                                 GestureDetector(
                                   onTap: () async {
+                                    FocusScope.of(context).unfocus();
                                     final picked = await showModalBottomSheet<String>(
                                       context: context,
                                       builder: (ctx) => _dayPickerSheet(ctx, days),
@@ -485,7 +504,11 @@ class CoursesScreenState extends State<CoursesScreen> {
                                 const Spacer(),
                                 if (_courseEvents.length > 1)
                                   GestureDetector(
-                                    onTap: () => setDialogState(() => _courseEvents.removeAt(i)),
+                                    onTap: () => setDialogState(() {
+                                      (_courseEvents[i]['startCtrl'] as TextEditingController).dispose();
+                                      (_courseEvents[i]['endCtrl'] as TextEditingController).dispose();
+                                      _courseEvents.removeAt(i);
+                                    }),
                                     child: const Icon(Icons.close_rounded, size: 18, color: Colors.red),
                                   ),
                               ],
@@ -505,7 +528,7 @@ class CoursesScreenState extends State<CoursesScreen> {
                                       filled: true,
                                       fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade700 : Colors.white,
                                     ),
-                                    keyboardType: TextInputType.datetime,
+                                    keyboardType: TextInputType.text,
                                   ),
                                 ),
                                 const Padding(
@@ -524,7 +547,7 @@ class CoursesScreenState extends State<CoursesScreen> {
                                       filled: true,
                                       fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade700 : Colors.white,
                                     ),
-                                    keyboardType: TextInputType.datetime,
+                                    keyboardType: TextInputType.text,
                                   ),
                                 ),
                               ],
@@ -554,8 +577,10 @@ class CoursesScreenState extends State<CoursesScreen> {
               actions: [
                 TextButton(
                   onPressed: () {
-                    clearControllers();
                     Navigator.pop(context);
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) clearControllers();
+                    });
                   },
                   child: const Text("Cancel"),
                 ),
@@ -581,6 +606,7 @@ class CoursesScreenState extends State<CoursesScreen> {
     selectedColor = Color(course["color"] ?? Colors.deepPurple.value);
 
     // Load events — support new "events" list and old "lectures"/"lecture" + "tutorial" formats
+    _disposeEventControllers();
     _courseEvents.clear();
     final rawEvents = course["events"];
     if (rawEvents is List && rawEvents.isNotEmpty) {
@@ -627,127 +653,6 @@ class CoursesScreenState extends State<CoursesScreen> {
     }
 
     showAddCourseDialog();
-  }
-
-  void showAddDeadlineDialog(Map<String, dynamic> course) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              title: Text("Add Deadline — ${course["name"]}"),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: deadlineTitleController,
-                      autofocus: true,
-                      decoration: InputDecoration(
-                        hintText: "Assignment / Exam...",
-                        filled: true, fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    // Type picker
-                    GestureDetector(
-                      onTap: () async {
-                        final picked = await showModalBottomSheet<String>(
-                          context: context,
-                          builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                            const Padding(padding: EdgeInsets.all(12), child: Text("Deadline Type", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-                            ListTile(leading: const Icon(Icons.assignment, color: Colors.orange), title: const Text("Homework"), onTap: () => Navigator.pop(ctx, "Homework")),
-                            ListTile(leading: const Icon(Icons.school, color: Colors.red), title: const Text("Exam"), onTap: () => Navigator.pop(ctx, "Exam")),
-                          ])),
-                        );
-                        if (picked != null) setDialogState(() => selectedDeadlineType = picked);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        decoration: BoxDecoration(color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade700.withOpacity(0.3))),
-                        child: Row(children: [
-                          const Icon(Icons.category_rounded, size: 16, color: Colors.deepPurple),
-                          const SizedBox(width: 10),
-                          Text(selectedDeadlineType, style: const TextStyle(fontWeight: FontWeight.w600)),
-                          const Spacer(),
-                          const Icon(Icons.arrow_drop_down, color: Colors.grey),
-                        ]),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    // Date picker
-                    GestureDetector(
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context, initialDate: DateTime.now(),
-                          firstDate: DateTime.now(), lastDate: DateTime(2030),
-                        );
-                        if (picked != null) setDialogState(() => selectedDeadlineDate = picked);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                        decoration: BoxDecoration(color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50, borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: selectedDeadlineDate != null ? Colors.deepPurple.shade200 : Colors.grey.shade600.withOpacity(0.3))),
-                        child: Row(children: [
-                          Icon(Icons.event_rounded, size: 18, color: selectedDeadlineDate != null ? Colors.deepPurple : Colors.grey),
-                          const SizedBox(width: 10),
-                          Text(
-                            selectedDeadlineDate != null
-                                ? "${selectedDeadlineDate!.day}/${selectedDeadlineDate!.month}/${selectedDeadlineDate!.year}"
-                                : "Set due date...",
-                            style: TextStyle(fontWeight: FontWeight.w600, color: selectedDeadlineDate != null ? Theme.of(context).colorScheme.onSurface : Colors.grey),
-                          ),
-                        ]),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    TextField(
-                      controller: deadlineEstimatedHoursController,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: "Estimated Study Hours",
-                        filled: true, fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade50,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(onPressed: () { deadlineTitleController.clear(); deadlineEstimatedHoursController.clear(); Navigator.pop(context); }, child: const Text("Cancel")),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  onPressed: () async {
-                    if (deadlineTitleController.text.trim().isEmpty || selectedDeadlineDate == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please choose a date and title")));
-                      return;
-                    }
-                    final newDeadline = {
-                      "title": deadlineTitleController.text,
-                      "course": course["name"],
-                      "type": selectedDeadlineType,
-                      "date": selectedDeadlineDate!.toString().split(" ")[0],
-                      "estimatedHours": deadlineEstimatedHoursController.text,
-                    };
-                    await StorageService.addDeadline(newDeadline);
-                    deadlineTitleController.clear();
-                    deadlineEstimatedHoursController.clear();
-                    selectedDeadlineDate = null;
-                    selectedDeadlineType = "Homework";
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Deadline added ✓")));
-                  },
-                  child: const Text("Add"),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
   }
 
   TimeOfDay parseTime(String time) {
@@ -801,11 +706,18 @@ class CoursesScreenState extends State<CoursesScreen> {
       }
 
       String? oldCourseName;
-      int? removingIndex;
+      final List<String> oldItemIds = [];
 
       if (isEditing) {
         oldCourseName = courses[editingIndex]["name"];
-        removingIndex = editingIndex;
+        // Collect Firestore doc IDs before removing from the local list
+        for (final item in loadedSchedule) {
+          if (item["type"] == "Course" &&
+              (item["name"] == oldCourseName || item["courseName"] == oldCourseName)) {
+            final id = item["id"]?.toString();
+            if (id != null) oldItemIds.add(id);
+          }
+        }
         loadedSchedule.removeWhere((item) =>
             item["type"] == "Course" &&
             (item["name"] == oldCourseName || item["courseName"] == oldCourseName));
@@ -854,9 +766,10 @@ class CoursesScreenState extends State<CoursesScreen> {
         }
       }
 
-      loadedSchedule.add(course);
+      // Build new items: course object + one schedule item per event
+      final newItems = <Map<String, dynamic>>[course];
       for (final evt in validEvents) {
-        loadedSchedule.add({
+        newItems.add({
           "title": "${course["name"]} ${evt['type']}",
           "type": "Course",
           "courseName": course["name"],
@@ -867,16 +780,30 @@ class CoursesScreenState extends State<CoursesScreen> {
         });
       }
 
-      await StorageService.saveSchedule(loadedSchedule);
+      // Targeted batch ops: replaces saveSchedule (delete-all + N sequential adds).
+      // Edit: delete only this course's old docs + add new ones in one round-trip.
+      // Add: just batch-add the new items, touching nothing else.
+      if (isEditing) {
+        await StorageService.replaceScheduleItems(deleteIds: oldItemIds, addItems: newItems);
+      } else {
+        await StorageService.addScheduleItemsBatch(newItems);
+      }
 
       if (!mounted) return;
       setState(() {
-        if (removingIndex != null) courses.removeAt(removingIndex);
+        if (oldCourseName != null) {
+          courses.removeWhere((c) => c["name"] == oldCourseName);
+        }
         courses.add(course);
       });
 
       Navigator.pop(context);
-      clearControllers();
+      // Defer disposal to after the dialog's dismiss animation begins;
+      // disposing controllers while TextField widgets are still mounted causes
+      // _dependents.isEmpty assertion failures in InheritedElement.unmount().
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) clearControllers();
+      });
     } finally {
       _isSavingCourse = false;
     }
@@ -933,7 +860,7 @@ class CoursesScreenState extends State<CoursesScreen> {
     ];
 
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1028,6 +955,58 @@ class CoursesScreenState extends State<CoursesScreen> {
     return Icons.school_rounded;
   }
 
+  Future<void> _deleteSelectedCourses() async {
+    final toDelete = courses.where((c) => _selectedNames.contains(c["name"]?.toString())).toList();
+    if (toDelete.isEmpty) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Delete Courses"),
+        content: Text("Delete ${toDelete.length} course${toDelete.length == 1 ? '' : 's'}?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    setState(() {
+      courses.removeWhere((c) => _selectedNames.contains(c["name"]?.toString()));
+      _selectMode = false;
+      _selectedNames.clear();
+    });
+
+    // Batch-delete all schedule items for all selected courses in one round-trip
+    final courseNames = toDelete.map((c) => c["name"]?.toString()).toSet();
+    final loaded = await StorageService.loadSchedule();
+    final scheduleIdsToDelete = loaded
+        .where((item) =>
+            item["type"] == "Course" &&
+            (courseNames.contains(item["name"]?.toString()) ||
+             courseNames.contains(item["courseName"]?.toString())))
+        .map((item) => item["id"]?.toString())
+        .where((id) => id != null)
+        .cast<String>()
+        .toList();
+    if (scheduleIdsToDelete.isNotEmpty) {
+      await StorageService.replaceScheduleItems(deleteIds: scheduleIdsToDelete, addItems: []);
+    }
+
+    // Delete associated deadlines
+    for (final course in toDelete) {
+      final deadlines = await StorageService.loadDeadlines();
+      for (final d in deadlines) {
+        if (d["course"] == course["name"] && d["id"] != null) {
+          await StorageService.deleteDeadline(d["id"]);
+        }
+      }
+    }
+  }
+
   String _todToStr(TimeOfDay tod) =>
       '${tod.hour.toString().padLeft(2, '0')}:${tod.minute.toString().padLeft(2, '0')}';
 
@@ -1041,9 +1020,11 @@ class CoursesScreenState extends State<CoursesScreen> {
 
   IconData _eventTypeIcon(String type) {
     switch (type) {
+      case 'Lecture': return Icons.cast_for_education_rounded;
       case 'Tutorial': return Icons.people_rounded;
       case 'Workshop': return Icons.build_rounded;
       case 'Lab': return Icons.science_rounded;
+      case 'Other': return Icons.category_rounded;
       default: return Icons.cast_for_education_rounded;
     }
   }
@@ -1059,12 +1040,11 @@ class CoursesScreenState extends State<CoursesScreen> {
   }
 
   void clearControllers() {
+    _disposeEventControllers();
     _courseEvents = [{'type': 'Lecture', 'day': 'Sunday', 'startCtrl': TextEditingController(), 'endCtrl': TextEditingController()}];
-
     courseNameController.clear();
     isEditing = false;
     editingIndex = -1;
-
     selectedColor = Colors.deepPurple;
   }
 }
