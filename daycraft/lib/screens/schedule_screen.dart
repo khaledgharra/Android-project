@@ -23,6 +23,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   String selectedDay = "Sunday";
   String selectedType = "Activity";
+  String _selectedRecurrence = 'Weekly';
 
   final List<String> days = [
     "Sunday",
@@ -150,12 +151,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       return;
     }
 
-    final newItem = {
+    final newItem = <String, dynamic>{
       "title": titleController.text,
       "type": selectedType,
       "day": selectedDay,
       "start": startStr,
       "end": endStr,
+      if (_selectedRecurrence == 'Once')
+        "date": _fmtDate(_currentWeekSunday.add(Duration(days: days.indexOf(selectedDay)))),
     };
 
     final docId = await StorageService.addScheduleItem(newItem);
@@ -176,6 +179,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     _endTimeCtrl.clear();
     selectedType = "Activity";
     selectedDay = currentViewDay;
+    _selectedRecurrence = 'Weekly';
 
     showModalBottomSheet(
       context: context,
@@ -323,6 +327,46 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                           if (picked != null) setSheetState(() => selectedDay = picked);
                         },
                       ),
+                      const SizedBox(width: 8),
+                      _chip(
+                        label: _selectedRecurrence,
+                        icon: _selectedRecurrence == 'Weekly'
+                            ? Icons.repeat_rounded
+                            : Icons.looks_one_rounded,
+                        color: _selectedRecurrence == 'Weekly'
+                            ? Colors.indigo
+                            : Colors.teal,
+                        onTap: () async {
+                          FocusScope.of(ctx).unfocus();
+                          final picked = await showModalBottomSheet<String>(
+                            context: ctx,
+                            builder: (c) => SafeArea(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Padding(
+                                    padding: EdgeInsets.all(14),
+                                    child: Text("Recurrence", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                  ),
+                                  ListTile(
+                                    leading: const Icon(Icons.repeat_rounded, color: Colors.indigo),
+                                    title: const Text('Weekly'),
+                                    subtitle: const Text('Repeats every week on this day'),
+                                    onTap: () => Navigator.pop(c, 'Weekly'),
+                                  ),
+                                  ListTile(
+                                    leading: const Icon(Icons.looks_one_rounded, color: Colors.teal),
+                                    title: const Text('Once'),
+                                    subtitle: const Text('One time only on this date'),
+                                    onTap: () => Navigator.pop(c, 'Once'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                          if (picked != null) setSheetState(() => _selectedRecurrence = picked);
+                        },
+                      ),
                     ],
                   ),
                   const SizedBox(height: 14),
@@ -401,6 +445,13 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       // Date-specific items (e.g. AI study sessions) only appear on their exact date
       final itemDate = item["date"]?.toString();
       if (itemDate != null && itemDate.isNotEmpty) return itemDate == viewDateStr;
+      // Hide recurring items that fall after the semester end date
+      final semEnd = StorageService.currentSemesterEndDate;
+      if (semEnd != null) {
+        final viewDay = DateTime(_currentViewDate.year, _currentViewDate.month, _currentViewDate.day);
+        final endDay = DateTime(semEnd.year, semEnd.month, semEnd.day);
+        if (viewDay.isAfter(endDay)) return false;
+      }
       return true; // Recurring weekly items show every week
     }).toList();
 

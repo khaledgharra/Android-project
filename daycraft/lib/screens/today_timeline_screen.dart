@@ -185,6 +185,15 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
         final eventDate = item["date"];
         if (eventDate != null && eventDate != dateStr) return false;
       }
+      // Hide recurring events that fall after the semester end date
+      if (repeat == "weekly") {
+        final semEnd = StorageService.currentSemesterEndDate;
+        if (semEnd != null) {
+          final viewDay = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+          final endDay = DateTime(semEnd.year, semEnd.month, semEnd.day);
+          if (viewDay.isAfter(endDay)) return false;
+        }
+      }
       return true;
     }).toList();
     filtered.sort((a, b) {
@@ -530,21 +539,28 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
                 ),
                 const SizedBox(height: 12),
                 // Repeat toggle
-                GestureDetector(
-                  onTap: () {
-                    setDialogState(() => repeatMode = repeatMode == "once" ? "weekly" : "once");
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(color: fillColor, borderRadius: BorderRadius.circular(12), border: Border.all(color: repeatMode == "weekly" ? Colors.deepPurple.shade200 : Colors.grey.shade200)),
-                    child: Row(children: [
-                      Icon(Icons.repeat_rounded, size: 16, color: repeatMode == "weekly" ? Colors.deepPurple : Colors.grey),
-                      const SizedBox(width: 10),
-                      Text(repeatMode == "weekly" ? "Repeats every week" : "Once (this date only)", style: TextStyle(fontWeight: FontWeight.w600, color: repeatMode == "weekly" ? Colors.deepPurple : Colors.grey.shade700)),
-                      const Spacer(),
-                      Icon(repeatMode == "weekly" ? Icons.check_circle : Icons.circle_outlined, size: 20, color: repeatMode == "weekly" ? Colors.deepPurple : Colors.grey.shade400),
-                    ]),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: fillColor,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: repeatMode == "weekly" ? Colors.deepPurple.shade200 : Colors.grey.shade200),
                   ),
+                  child: Row(children: [
+                    Icon(Icons.repeat_rounded, size: 16, color: repeatMode == "weekly" ? Colors.deepPurple : Colors.grey.shade500),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text("Repeat weekly", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: repeatMode == "weekly" ? Colors.deepPurple : Theme.of(context).colorScheme.onSurface)),
+                        Text(repeatMode == "weekly" ? "Shows every week on this day" : "This date only", style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                      ]),
+                    ),
+                    Switch.adaptive(
+                      value: repeatMode == "weekly",
+                      onChanged: (v) => setDialogState(() => repeatMode = v ? "weekly" : "once"),
+                      activeColor: Colors.deepPurple,
+                    ),
+                  ]),
                 ),
                 const SizedBox(height: 12),
                 // Start → End time text boxes (same as courses)
@@ -1115,6 +1131,7 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
               final date = weekDates[dayIndex];
               final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
               final isToday = date.year == now.year && date.month == now.month && date.day == now.day;
+              final semEnd = StorageService.currentSemesterEndDate;
               final daySchedule = allSchedule.where((item) {
                 if (item["day"] != dayFullName || item["start"] == null || item["end"] == null) return false;
                 final exceptions = item["exceptions"];
@@ -1123,6 +1140,11 @@ class TodayTimelineScreenState extends State<TodayTimelineScreen> {
                 if (repeat == "once") {
                   final eventDate = item["date"];
                   if (eventDate != null && eventDate != dateStr) return false;
+                }
+                if (repeat == "weekly" && semEnd != null) {
+                  final dayDate = DateTime(date.year, date.month, date.day);
+                  final endDay = DateTime(semEnd.year, semEnd.month, semEnd.day);
+                  if (dayDate.isAfter(endDay)) return false;
                 }
                 return true;
               }).toList();

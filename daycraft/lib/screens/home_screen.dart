@@ -82,6 +82,9 @@ class _HomeScreenState extends State<HomeScreen> {
         (s) => s['id'] == activeId,
         orElse: () => <String, dynamic>{},
       );
+      final endDateStr = sem['endDate'] as String?;
+      StorageService.currentSemesterEndDate =
+          endDateStr != null ? DateTime.tryParse(endDateStr) : null;
       if (mounted) {
         setState(() => _currentSemesterName = (sem['name'] as String?) ?? '');
       }
@@ -94,6 +97,9 @@ class _HomeScreenState extends State<HomeScreen> {
         MaterialPageRoute(builder: (_) => const SemesterScreen(required: true)),
       );
       if (result != null && mounted) {
+        final endDateStr = result['endDate'] as String?;
+        StorageService.currentSemesterEndDate =
+            endDateStr != null ? DateTime.tryParse(endDateStr) : null;
         setState(() => _currentSemesterName = (result['name'] as String?) ?? '');
         _loadReminders();
         _loadDashboardStats();
@@ -106,6 +112,9 @@ class _HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute(builder: (_) => const SemesterScreen()),
     );
     if (result == null || !mounted) return;
+    final endDateStr = result['endDate'] as String?;
+    StorageService.currentSemesterEndDate =
+        endDateStr != null ? DateTime.tryParse(endDateStr) : null;
     // Clear stale state immediately so the UI doesn't flash old data.
     setState(() {
       _currentSemesterName = (result['name'] as String?) ?? '';

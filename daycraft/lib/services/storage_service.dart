@@ -7,6 +7,9 @@ class StorageService {
   /// The currently active semester ID. Must be set before any data operations.
   static String currentSemesterId = '';
 
+  /// End date of the active semester (null = no limit).
+  static DateTime? currentSemesterEndDate;
+
   static String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
   static DocumentReference? get _userDoc {
@@ -75,15 +78,35 @@ class StorageService {
   }
 
   /// Creates a new semester, saves it to Firestore, and returns its generated ID.
-  static Future<String?> createSemester(String name) async {
+  static Future<String?> createSemester(String name, {String? endDate}) async {
     final userDoc = _userDoc;
     if (userDoc == null) return null;
     final semRef = userDoc.collection('semesters').doc();
-    await semRef.set({'name': name, 'createdAt': FieldValue.serverTimestamp()});
+    final docData = <String, dynamic>{'name': name, 'createdAt': FieldValue.serverTimestamp()};
+    if (endDate != null) docData['endDate'] = endDate;
+    await semRef.set(docData);
     final semesters = await loadSemesters();
-    semesters.add({'id': semRef.id, 'name': name});
+    final entry = <String, dynamic>{'id': semRef.id, 'name': name};
+    if (endDate != null) entry['endDate'] = endDate;
+    semesters.add(entry);
     await saveSemesters(semesters);
     return semRef.id;
+  }
+
+  /// Updates the end date of an existing semester (null clears it).
+  static Future<void> updateSemesterEndDate(String semId, String? endDate) async {
+    final semesters = await loadSemesters();
+    for (final s in semesters) {
+      if (s['id'] == semId) {
+        if (endDate != null) {
+          s['endDate'] = endDate;
+        } else {
+          s.remove('endDate');
+        }
+        break;
+      }
+    }
+    await saveSemesters(semesters);
   }
 
   /// Deletes a semester document AND all its subcollection data in one batch.
