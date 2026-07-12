@@ -22,7 +22,7 @@ class GeminiService {
     _lastError = null;
 
     if (_apiKey.isEmpty) {
-      debugPrint('Google AI Studio API key not configured');
+      //debugPrint('Google AI Studio API key not configured');
       _lastError = 'API key not configured';
       return _getFallbackTasks(goal);
     }
@@ -64,7 +64,7 @@ Example format: ["Task 1", "Task 2", "Task 3"]''';
           )
           .timeout(const Duration(seconds: 15));
 
-      debugPrint('AI Status: ${response.statusCode}');
+      //debugPrint('AI Status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(response.body);
@@ -89,11 +89,11 @@ Example format: ["Task 1", "Task 2", "Task 3"]''';
         _lastError = 'Bad request or invalid configuration (400)';
       } else {
         _lastError = 'HTTP ${response.statusCode}';
-        debugPrint('Google API error body: ${response.body}');
+        //debugPrint('Google API error body: ${response.body}');
       }
     } catch (e) {
       _lastError = e.toString();
-      debugPrint('Google Native Exception: $e');
+        //debugPrint('Google Native Exception: $e');
     }
 
     return _getFallbackTasks(goal);
@@ -191,7 +191,7 @@ Example format: ["Task 1", "Task 2", "Task 3"]''';
     _lastError = null;
 
     if (_apiKey.isEmpty) {
-      debugPrint('Google AI Studio API key not configured');
+      //debugPrint('Google AI Studio API key not configured');
       _lastError = 'API key not configured';
       return _getFallbackSchedulePlan(deadlines, today);
     }
@@ -278,7 +278,7 @@ Respond with a raw JSON object containing a "sessions" key with the array, nothi
           )
           .timeout(const Duration(seconds: 45));
 
-      debugPrint('Schedule AI status: ${response.statusCode}');
+      //debugPrint('Schedule AI status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(response.body);
@@ -302,14 +302,14 @@ Respond with a raw JSON object containing a "sessions" key with the array, nothi
         _lastError = 'Rate limited (429)';
       } else {
         _lastError = 'HTTP ${response.statusCode}';
-        debugPrint('Schedule AI native error body: ${response.body}');
+        //debugPrint('Schedule AI native error body: ${response.body}');
       }
     } catch (e) {
       _lastError = e.toString();
-      debugPrint('❌ Schedule AI Native Exception: $e');
+      //debugPrint('❌ Schedule AI Native Exception: $e');
     }
 
-    debugPrint('⚠️ AI Generation failed completely. Reason: $_lastError. Dropping down to fallback schedule.');
+   // debugPrint('⚠️ AI Generation failed completely. Reason: $_lastError. Dropping down to fallback schedule.');
     return _getFallbackSchedulePlan(deadlines, today);
   }
 
@@ -407,7 +407,7 @@ Respond with a raw JSON object containing a "sessions" key with the array, nothi
         }
       }
     } catch (e) {
-      debugPrint('❌ Custom text extraction failed: $e');
+     // debugPrint('❌ Custom text extraction failed: $e');
     }
 
     return sessions;

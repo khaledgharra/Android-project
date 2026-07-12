@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/gemini_service.dart';
 import '../services/storage_service.dart';
+import '../widgets/ai_report_section.dart';
 
 class AIAssistantScreen extends StatefulWidget {
   final String? deadlineId;
@@ -24,6 +25,7 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
   Set<int> selectedIndices = {};
   bool isLoading = false;
   bool hasGenerated = false;
+  String _lastPrompt = '';
 
   @override
   void initState() {
@@ -45,19 +47,23 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
       return;
     }
 
+    final promptText = _goalController.text.trim();
     setState(() {
       isLoading = true;
       hasGenerated = false;
       generatedTasks = [];
       selectedIndices = {};
+      _lastPrompt = promptText;
     });
 
-    final tasks = await GeminiService.generateStudyPlan(_goalController.text.trim());
+    final tasks = await GeminiService.generateStudyPlan(promptText);
 
     if (!mounted) return;
     setState(() {
       generatedTasks = tasks;
-      selectedIndices = Set.from(List.generate(tasks.length, (i) => i)); // Select all by default
+      selectedIndices = Set.from(
+        List.generate(tasks.length, (i) => i),
+      ); // Select all by default
       isLoading = false;
       hasGenerated = true;
     });
@@ -67,7 +73,9 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
     if (error != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("⚠️ AI unavailable: $error\nShowing suggested tasks instead."),
+          content: Text(
+            "⚠️ AI unavailable: $error\nShowing suggested tasks instead.",
+          ),
           backgroundColor: Colors.orange.shade700,
           duration: const Duration(seconds: 4),
         ),
@@ -78,7 +86,11 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
   Future<void> _saveToDeadline() async {
     if (widget.deadlineId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("No deadline linked. Tasks generated for reference only.")),
+        const SnackBar(
+          content: Text(
+            "No deadline linked. Tasks generated for reference only.",
+          ),
+        ),
       );
       Navigator.pop(context);
       return;
@@ -90,17 +102,18 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
 
     // Load current deadline data and add subtasks
     final deadlines = await StorageService.loadDeadlines();
-    final deadlineIndex = deadlines.indexWhere((d) => d['id'] == widget.deadlineId);
+    final deadlineIndex = deadlines.indexWhere(
+      (d) => d['id'] == widget.deadlineId,
+    );
 
     if (deadlineIndex >= 0) {
       final deadline = deadlines[deadlineIndex];
-      final existingSubtasks = List<Map<String, dynamic>>.from(deadline['subtasks'] ?? []);
+      final existingSubtasks = List<Map<String, dynamic>>.from(
+        deadline['subtasks'] ?? [],
+      );
 
       for (var i in selectedIndices.toList()..sort()) {
-        existingSubtasks.add({
-          "title": generatedTasks[i],
-          "done": false,
-        });
+        existingSubtasks.add({"title": generatedTasks[i], "done": false});
       }
 
       await StorageService.updateDeadline(widget.deadlineId!, {
@@ -163,7 +176,10 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: Colors.deepPurple, width: 2),
+                    borderSide: const BorderSide(
+                      color: Colors.deepPurple,
+                      width: 2,
+                    ),
                   ),
                 ),
               ),
@@ -194,7 +210,10 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
                         )
                       : const Text(
                           "✨ Generate Study Plan",
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                 ),
               ),
@@ -241,7 +260,10 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
                   children: [
                     const Text(
                       "Generated Tasks",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const Spacer(),
                     TextButton(
@@ -270,69 +292,88 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: generatedTasks.length,
                   itemBuilder: (context, index) {
-                      final isSelected = selectedIndices.contains(index);
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        decoration: BoxDecoration(
+                    final isSelected = selectedIndices.contains(index);
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? Colors.deepPurple.withValues(alpha: 0.06)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
                           color: isSelected
-                              ? Colors.deepPurple.withValues(alpha: 0.06)
-                              : Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: isSelected
-                                ? Colors.deepPurple.withValues(alpha: 0.3)
-                                : Colors.grey.shade200,
-                            width: 1.5,
-                          ),
+                              ? Colors.deepPurple.withValues(alpha: 0.3)
+                              : Colors.grey.shade200,
+                          width: 1.5,
                         ),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(14),
-                          onTap: () {
-                            setState(() {
-                              if (isSelected) {
-                                selectedIndices.remove(index);
-                              } else {
-                                selectedIndices.add(index);
-                              }
-                            });
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 28,
-                                  height: 28,
-                                  decoration: BoxDecoration(
-                                    color: isSelected ? Colors.deepPurple : Colors.transparent,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: isSelected ? Colors.deepPurple : Colors.grey.shade400,
-                                      width: 2,
-                                    ),
-                                  ),
-                                  child: isSelected
-                                      ? const Icon(Icons.check, color: Colors.white, size: 16)
-                                      : null,
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Text(
-                                    generatedTasks[index],
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: isSelected ? Colors.black87 : Colors.grey.shade600,
-                                    ),
+                      ),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () {
+                          setState(() {
+                            if (isSelected) {
+                              selectedIndices.remove(index);
+                            } else {
+                              selectedIndices.add(index);
+                            }
+                          });
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? Colors.deepPurple
+                                      : Colors.transparent,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? Colors.deepPurple
+                                        : Colors.grey.shade400,
+                                    width: 2,
                                   ),
                                 ),
-                              ],
-                            ),
+                                child: isSelected
+                                    ? const Icon(
+                                        Icons.check,
+                                        color: Colors.white,
+                                        size: 16,
+                                      )
+                                    : null,
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Text(
+                                  generatedTasks[index],
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: isSelected
+                                        ? Colors.black87
+                                        : Colors.grey.shade600,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 16),
+                AIReportSection(
+                  feature: 'study_assistant',
+                  generatedContent: generatedTasks.join('\n'),
+                  userPrompt: _lastPrompt,
+                ),
                 const SizedBox(height: 16),
 
                 // Save button
@@ -352,7 +393,10 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
                       widget.deadlineId != null
                           ? "💾 Save ${selectedIndices.length} Tasks to Deadline"
                           : "✅ Done",
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),

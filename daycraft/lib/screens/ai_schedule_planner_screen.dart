@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import '../services/gemini_service.dart';
 import '../services/storage_service.dart';
+import '../widgets/ai_report_section.dart';
 
 class AISchedulePlannerScreen extends StatefulWidget {
   const AISchedulePlannerScreen({super.key});
@@ -20,6 +23,7 @@ class _AISchedulePlannerScreenState extends State<AISchedulePlannerScreen> {
   List<Map<String, dynamic>> _schedule = [];
   List<Map<String, dynamic>> _sessions = [];
   Set<int> _selected = {};
+  String _lastPrompt = '';
 
   // Track which deadlines the user wants the AI to schedule
   Set<String> _selectedDeadlineIds = {};
@@ -148,20 +152,29 @@ class _AISchedulePlannerScreenState extends State<AISchedulePlannerScreen> {
       return;
     }
 
-    setState(() {
-      _generating = true;
-      _hasGenerated = false;
-      _sessions = [];
-      _selected = {};
-    });
-
-    final now = DateTime.now();
-
     // Only pass deadlines the user explicitly checked
     final chosenDeadlines = _deadlines.where((d) {
       final id = d['id']?.toString() ?? d['title'] ?? '';
       return _selectedDeadlineIds.contains(id);
     }).toList();
+
+    final selectedTitles = chosenDeadlines
+        .map((d) => d['title']?.toString() ?? '')
+        .where((title) => title.isNotEmpty)
+        .toList();
+    final promptText = selectedTitles.isNotEmpty
+        ? 'Generate a study schedule for: ${selectedTitles.join(', ')}.'
+        : 'Generate a study schedule for selected deadlines.';
+
+    setState(() {
+      _generating = true;
+      _hasGenerated = false;
+      _sessions = [];
+      _selected = {};
+      _lastPrompt = promptText;
+    });
+
+    final now = DateTime.now();
 
     final rawSessions = await GeminiService.generateSchedulePlan(
       deadlines: chosenDeadlines,
@@ -636,6 +649,14 @@ class _AISchedulePlannerScreenState extends State<AISchedulePlannerScreen> {
             ),
             const SizedBox(height: 8),
             ..._buildGroupedSessions(isDark),
+            const SizedBox(height: 18),
+            AIReportSection(
+              feature: 'schedule_planner',
+              generatedContent: const JsonEncoder.withIndent(
+                '  ',
+              ).convert(_sessions),
+              userPrompt: _lastPrompt,
+            ),
           ],
         ],
       ],
